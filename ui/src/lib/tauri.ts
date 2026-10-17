@@ -2,6 +2,13 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 export type Persona = 'online' | 'invisible'
+export type LoginPhase =
+  | 'idle'
+  | 'connecting'
+  | 'awaiting_guard'
+  | 'awaiting_qr'
+  | 'awaiting_approval'
+  | 'qr_expired'
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected'
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 
@@ -18,6 +25,8 @@ export interface Config {
 
 export interface AppState {
   connection: ConnectionState
+  loginPhase: LoginPhase
+  qrDataUrl: string | null
   persona: Persona | null
   desired: Persona
   inWindow: boolean

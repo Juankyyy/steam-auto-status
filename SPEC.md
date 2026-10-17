@@ -37,11 +37,12 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
    conviven sin expulsarse. La app **nunca "juega"** nada (`gamesPlayed` no se usa), por lo
    que no interfiere con juegos ni VAC. Si se detectara expulsión mutua
    (`EResult.LogonSessionReplaced`), mitigación: fijar un `logonID` distinto y único.
-5. **Autenticación:** primer login interactivo mediante **formulario en la UI**
-   (usuario + contraseña + código 2FA, eventos `steamGuard` de `steam-user`). Después,
-   `steam-user` emite un **refresh token** (JWT válido ~200 días, se renueva en cada uso con
-   `renewRefreshTokens: true`) que se guarda localmente. Los arranques posteriores no piden
-   nada.
+5. **Autenticación:** primer login interactivo en la UI con dos métodos: **código QR**
+   (recomendado; `steam-session` + app móvil de Steam, sin escribir nada) o
+   **usuario/contraseña** (con confirmación/aprobación desde la app móvil). El login obtiene
+   un **refresh token** de plataforma `SteamClient` (JWT válido ~200 días; `steam-user` lo
+   renueva con `renewRefreshTokens: true`) que se guarda localmente. Los arranques
+   posteriores no piden nada.
 
 ## 3. Decisiones tomadas
 
@@ -144,8 +145,15 @@ Pantalla única (ventana ~900×620) con tres zonas y tema oscuro por defecto:
    activar/pausar, iniciar con Windows, notificaciones, carpeta de datos.
 3. **Pruebas + log**: forzar Conectado / Invisible durante X minutos; log en vivo; estado de
    conexión con Steam (conectado/reintentando).
-4. **Primer login**: formulario usuario/contraseña/código 2FA (visible cuando el sidecar
-   emite `authRequired`).
+4. **Primer login** (visible cuando el sidecar emite `authRequired`):
+   - **Pestaña "Código QR"** (por defecto): el sidecar abre una sesión QR con
+     `steam-session` (`EAuthTokenPlatformType.SteamClient`), genera la imagen con `qrcode`
+     y la expone en el estado (`qrDataUrl`). Fases: `awaiting_qr` → (escaneo)
+     `awaiting_approval` → `connecting` → conectado. Caduca a los 2,5 min (`qr_expired`)
+     con botón de regenerar.
+   - **Pestaña "Usuario y contraseña"**: flujo clásico con `steam-user` (código Steam Guard
+     cuando corresponda; el campo ya no se bloquea — el estado `loginPhase` separa
+     "esperando código" de "conectando").
 
 Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
 `emit` al webview.
@@ -266,6 +274,9 @@ Disco instalado estimado: ~60–90 MB.
 - [x] Sidecar (lógica del núcleo + IPC stdio + postbuild de `system.pem`)
 - [x] Shell (bandeja, ventana bajo demanda, supervisión del sidecar, plugins)
 - [x] UI shadcn (estado con cuenta atrás / configuración / pruebas+log + formulario 2FA)
+- [x] Bloque 1 del login: fix del campo de código (`loginPhase`) + login por QR con
+      `steam-session`/`qrcode` — pendiente de prueba del usuario
+- [ ] Bloque 2 del login: credenciales v2 con aprobación desde la app móvil
 - [ ] Prueba manual completa del usuario (login, forzados, franjas, bandeja)
 - [ ] Empaquetado del sidecar (runtime Node o SEA) + instalador NSIS
 - [ ] README final

@@ -105,7 +105,8 @@ export default function App() {
           {showLogin && (
             <LoginPanel
               guard={state?.guardNeeded ?? null}
-              connecting={state?.connection === 'connecting'}
+              phase={state?.loginPhase ?? 'idle'}
+              qrDataUrl={state?.qrDataUrl ?? null}
               error={state?.lastError?.message ?? null}
               reason={loginReason}
             />

@@ -9,6 +9,8 @@
  */
 
 import SteamUser from 'steam-user';
+import { EAuthTokenPlatformType, LoginSession } from 'steam-session';
+import QRCode from 'qrcode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
@@ -18,6 +20,7 @@ import * as readline from 'node:readline';
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 type Day = (typeof DAYS)[number];
 type Persona = 'online' | 'invisible';
+type LoginPhase = 'idle' | 'connecting' | 'awaiting_guard' | 'awaiting_qr' | 'awaiting_approval' | 'qr_expired';
 
 interface Config {
   days: Day[];
@@ -259,6 +262,9 @@ let appliedPersona: Persona | null = null;
 let lastError: { message: string; eresult?: number } | null = null;
 let guard: { domain: string | null; callback: (code: string) => void; wrong: boolean } | null = null;
 let force: { persona: Persona; until: number } | null = null;
+let loginPhase: LoginPhase = 'idle';
+let qrSession: LoginSession | null = null;
+let qrDataUrl: string | null = null;
 
 function eresultName(v: unknown): string {
   const n = Number(v);
@@ -302,6 +308,8 @@ function buildState() {
 
   return {
     connection: steamConnected ? 'connected' : loggingIn ? 'connecting' : 'disconnected',
+    loginPhase,
+    qrDataUrl: loginPhase === 'awaiting_qr' || loginPhase === 'awaiting_approval' ? qrDataUrl : null,
     persona,
     desired: desiredPersona(),
     inWindow: inWindowAt(now, cfg),
@@ -332,6 +340,8 @@ function newClient(): SteamUser {
   u.on('loggedOn', () => {
     steamConnected = true;
     loggingIn = false;
+    loginPhase = 'idle';
+    qrDataUrl = null;
     guard = null;
     lastError = null;
     log(`Conectado a Steam como ${u.steamID ?? '?'}`);
@@ -352,6 +362,8 @@ function newClient(): SteamUser {
   });
 
   u.on('steamGuard', (domain: string | null, callback: (code: string) => void, lastCodeWrong: boolean) => {
+    loggingIn = false;
+    loginPhase = 'awaiting_guard';
     guard = { domain: domain ?? null, callback, wrong: !!lastCodeWrong };
     log(domain ? `Steam Guard: se necesita código del email (…${domain})` : 'Steam Guard: se necesita código de la app móvil');
     pushState();
@@ -362,6 +374,7 @@ function newClient(): SteamUser {
     loggingIn = false;
     steamConnected = false;
     guard = null;
+    loginPhase = 'idle';
     lastError = { message: e.message ?? String(e), eresult: e.eresult };
     log(`Error de Steam: ${lastError.message}${e.eresult !== undefined ? ` [${eresultName(e.eresult)}]` : ''}`);
     pushState();
@@ -406,6 +419,7 @@ function start() {
     }
   }
   loggingIn = true;
+  loginPhase = 'connecting';
   lastError = null;
   user = newClient();
   log('Iniciando sesión con token guardado…');
@@ -422,6 +436,7 @@ function doLogin(params: Record<string, unknown>) {
     const cb = guard.callback;
     guard = null;
     loggingIn = true;
+    loginPhase = 'connecting';
     log('Código de Steam Guard enviado');
     pushState();
     cb(code);
@@ -439,7 +454,9 @@ function doLogin(params: Record<string, unknown>) {
       /* ignorar */
     }
   }
+  cancelQrSession();
   loggingIn = true;
+  loginPhase = 'connecting';
   lastError = null;
   user = newClient();
   log(`Iniciando sesión como ${accountName}…`);
@@ -465,10 +482,108 @@ function doLogout() {
   guard = null;
   force = null;
   lastError = null;
+  loginPhase = 'idle';
+  cancelQrSession();
   clearAuth();
   log('Sesión cerrada (token eliminado)');
   pushState();
   emit('authRequired', { kind: 'login', reason: 'Sesión cerrada' });
+}
+
+// ---------------------------------------------------------------- login por QR (steam-session)
+
+function cancelQrSession() {
+  if (qrSession) {
+    try {
+      qrSession.cancelLoginAttempt();
+    } catch {
+      /* ignorar */
+    }
+    qrSession = null;
+  }
+  qrDataUrl = null;
+}
+
+function startQrLogin() {
+  cancelQrSession();
+  if (user && steamConnected) {
+    log('Ya hay una sesión conectada');
+    return;
+  }
+
+  loginPhase = 'awaiting_qr';
+  lastError = null;
+
+  const session = new LoginSession(EAuthTokenPlatformType.SteamClient, {
+    machineId: true,
+    machineFriendlyName: cfg.machineName,
+  });
+  session.loginTimeout = 150_000; // 2,5 min para escanear y aprobar
+  qrSession = session;
+
+  session.on('remoteInteraction', () => {
+    if (qrSession === session) {
+      loginPhase = 'awaiting_approval';
+      log('QR escaneado; esperando aprobación en la app móvil');
+      pushState();
+    }
+  });
+
+  session.on('authenticated', () => {
+    if (qrSession === session) qrSession = null;
+    qrDataUrl = null;
+    loginPhase = 'connecting';
+    saveAuth({
+      refreshToken: session.refreshToken,
+      steamID: session.steamID ? String(session.steamID) : undefined,
+    });
+    log(`QR aprobado (${session.accountName ?? 'cuenta'}); token de sesión guardado`);
+    if (user) {
+      try {
+        user.logOff();
+      } catch {
+        /* ignorar */
+      }
+      user = null;
+    }
+    start();
+  });
+
+  session.on('timeout', () => {
+    if (qrSession !== session) return;
+    qrSession = null;
+    qrDataUrl = null;
+    loginPhase = 'qr_expired';
+    log('El código QR caducó sin completarse');
+    pushState();
+  });
+
+  session.on('error', (e: Error & { eresult?: number }) => {
+    if (qrSession !== session) return;
+    qrSession = null;
+    qrDataUrl = null;
+    loginPhase = 'idle';
+    lastError = { message: e.message ?? String(e), eresult: e.eresult };
+    log(`Error en el login por QR: ${lastError.message}`);
+    pushState();
+  });
+
+  session
+    .startWithQR()
+    .then(async (res) => {
+      if (qrSession !== session) return;
+      qrDataUrl = await QRCode.toDataURL(res.qrChallengeUrl, { width: 288, margin: 2 });
+      log('Código QR listo: escanéalo con la app móvil de Steam');
+      pushState();
+    })
+    .catch((e: Error & { eresult?: number }) => {
+      if (qrSession !== session) return;
+      qrSession = null;
+      loginPhase = 'idle';
+      lastError = { message: e.message ?? String(e), eresult: e.eresult };
+      log(`No se pudo iniciar el login por QR: ${lastError.message}`);
+      pushState();
+    });
 }
 
 // ---------------------------------------------------------------- comandos IPC
@@ -552,6 +667,21 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
         res(id, { started: true });
         break;
 
+      case 'startQrLogin':
+        startQrLogin();
+        res(id, { started: true });
+        break;
+
+      case 'cancelQrLogin':
+        cancelQrSession();
+        if (loginPhase === 'awaiting_qr' || loginPhase === 'awaiting_approval' || loginPhase === 'qr_expired') {
+          loginPhase = 'idle';
+        }
+        log('Login por QR cancelado');
+        pushState();
+        res(id, {});
+        break;
+
       case 'getLogTail':
         res(id, { lines: readTail(Math.min(1000, Number(params.lines) || 200)) });
         break;
@@ -596,6 +726,7 @@ function shutdown(reason: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`Cerrando (${reason})`);
+  cancelQrSession();
   try {
     user?.logOff();
   } catch {
