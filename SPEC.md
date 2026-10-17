@@ -305,3 +305,11 @@ Disco instalado estimado: ~60–90 MB.
 - Repositorio remoto: `steam-auto-status` (rama `main`); los datos de la app viven en
   `Documents` y **nunca** en el repo (`.gitignore` excluye datos y token)
 - Pendiente de instalar para desarrollo: rustup + MSVC Build Tools, Tauri CLI
+
+## 9. Flujo de trabajo (acordado con el usuario)
+
+- Todo el trabajo nuevo se hace en la rama **`dev`**; `main` permanece estable.
+- **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
+  bloque/funcionalidad en su máquina. Los commits locales sobre `dev` sí se permiten;
+  lo que se retiene es el push al remoto.
+- Trabajo incremental por bloques, con parada para prueba del usuario tras cada uno.
