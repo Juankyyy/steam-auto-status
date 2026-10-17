@@ -277,9 +277,9 @@ Disco instalado estimado: ~60–90 MB.
 - [x] UI shadcn (estado con cuenta atrás / configuración / pruebas+log + formulario 2FA)
 - [x] Bloque 1 del login (verificado por el usuario): fix del campo de código +
       login por QR con `steam-session`/`qrcode`
-- [ ] Bloque 2 del login (en curso, sin push hasta verificación): credenciales con
-      `steam-session` (aprobación desde móvil / código) + volcado de errores del sidecar a
-      `sidecar-stderr.log`
+- [x] Bloque 2 del login (verificado por el usuario): credenciales con `steam-session`
+      (aprobación desde móvil / código) + volcado de errores del sidecar a
+      `sidecar-stderr.log` + arranque `--hidden` sin abrir ventana
 - [ ] Prueba manual completa del usuario (login, forzados, franjas, bandeja)
 - [ ] Empaquetado del sidecar (runtime Node o SEA) + instalador NSIS
 - [ ] README final
@@ -315,4 +315,5 @@ Disco instalado estimado: ~60–90 MB.
 - **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
   bloque/funcionalidad en su máquina. Los commits locales sobre `dev` sí se permiten;
   lo que se retiene es el push al remoto.
-- Trabajo incremental por bloques, con parada para prueba del usuario tras cada uno.
+- **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos (ej. "Crea la entidad de Room", "Crea la UI del widget con Glance").
+- **Comentarios:** Documenta las partes complejas, especialmente la interacción entre el BroadcastReceiver del widget y los coroutines.
