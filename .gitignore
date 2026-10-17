@@ -1,0 +1,27 @@
+# Dependencias
+node_modules/
+
+# Builds
+dist/
+ui/dist/
+sidecar/dist/
+src-tauri/target/
+src-tauri/gen/
+
+# Datos locales (config, token, logs) — nunca versionar
+data/
+*.log
+
+# Entorno
+.env
+.env.*
+
+# TypeScript
+*.tsbuildinfo
+
+# Editor / SO
+.vscode/*
+!.vscode/extensions.json
+.idea/
+.DS_Store
+Thumbs.db
