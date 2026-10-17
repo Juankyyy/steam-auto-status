@@ -1,0 +1,19 @@
+{
+  "name": "steam-auto-status",
+  "private": true,
+  "version": "0.1.0",
+  "workspaces": [
+    "ui",
+    "sidecar"
+  ],
+  "scripts": {
+    "dev": "npm run build:sidecar && tauri dev",
+    "build": "npm run build:sidecar && tauri build",
+    "build:sidecar": "npm run build --workspace sidecar",
+    "build:ui": "npm run build --workspace ui",
+    "tauri": "tauri"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2"
+  }
+}

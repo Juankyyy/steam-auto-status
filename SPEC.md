@@ -222,13 +222,18 @@ sus dispositivos, no para los amigos).
 
 ### 4.8 Presupuesto de recursos
 
-| Estado | RAM aproximada |
-|---|---|
-| Reposo (bandeja, ventana cerrada) | **~60–95 MB** (shell Rust ~10–25 + sidecar Node ~50–70) |
-| Ventana abierta | + ~80–150 MB temporales (procesos WebView2), liberados al cerrarla |
+Medido durante el desarrollo (puede variar ligeramente):
 
-Disco instalado: ~60–90 MB. Referencia descartada: Electron ~150–250 MB **siempre** en
-reposo.
+| Estado | RAM medida |
+|---|---|
+| Shell Tauri (proceso principal) | ~36 MB |
+| Sidecar Node + `steam-user` | ~100–120 MB |
+| Ventana abierta (procesos WebView2) | ~400 MB temporales, se liberan al destruirla |
+
+En reposo (ventana cerrada) queda shell + sidecar ≈ **140–160 MB**. En desarrollo hay
+procesos extra (vite, wrappers de npm, CLI de Tauri) que no existen en la app instalada.
+Electron fue descartado por mantener toda su pila (~150–250 MB) incluso minimizado.
+Disco instalado estimado: ~60–90 MB.
 
 ## 5. Limitaciones conocidas
 
@@ -256,13 +261,14 @@ reposo.
       shadcn)
 - [x] Datos en `Documents\steam-auto-status\` (config, auth, logs)
 - [x] Repositorio GitHub `steam-auto-status`: SPEC, README y `.gitignore` iniciales
-- [ ] Toolchain de desarrollo: Rust + MSVC Build Tools + Tauri CLI
-- [ ] Scaffold (`create-tauri-app`, template react-ts) y reorganización a la estructura
-- [ ] Sidecar (lógica del núcleo + IPC stdio)
-- [ ] Shell (bandeja, ventana, supervisión, plugins)
-- [ ] UI shadcn (estado / configuración / pruebas+log + formulario 2FA)
-- [ ] Empaquetado del sidecar (SEA) + instalador NSIS
-- [ ] Pruebas manuales y README final
+- [x] Toolchain de desarrollo: Rust + MSVC Build Tools + Tauri CLI
+- [x] Scaffold (Vite react-ts) + estructura `src-tauri/`, `ui/`, `sidecar/`
+- [x] Sidecar (lógica del núcleo + IPC stdio + postbuild de `system.pem`)
+- [x] Shell (bandeja, ventana bajo demanda, supervisión del sidecar, plugins)
+- [x] UI shadcn (estado con cuenta atrás / configuración / pruebas+log + formulario 2FA)
+- [ ] Prueba manual completa del usuario (login, forzados, franjas, bandeja)
+- [ ] Empaquetado del sidecar (runtime Node o SEA) + instalador NSIS
+- [ ] README final
 
 ## 7. Cómo verificar que funciona
 
