@@ -9,7 +9,7 @@
  */
 
 import SteamUser from 'steam-user';
-import { EAuthTokenPlatformType, LoginSession } from 'steam-session';
+import { EAuthSessionGuardType, EAuthTokenPlatformType, LoginSession } from 'steam-session';
 import QRCode from 'qrcode';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
@@ -264,6 +264,8 @@ let guard: { domain: string | null; callback: (code: string) => void; wrong: boo
 let force: { persona: Persona; until: number } | null = null;
 let loginPhase: LoginPhase = 'idle';
 let qrSession: LoginSession | null = null;
+let credsSession: LoginSession | null = null;
+let ssGuard: { domain: string | null; lastCodeWrong: boolean } | null = null;
 let qrDataUrl: string | null = null;
 
 function eresultName(v: unknown): string {
@@ -321,7 +323,7 @@ function buildState() {
     nextTransitionLabel: ntLabel,
     config: cfg,
     lastError,
-    guardNeeded: guard ? { domain: guard.domain, lastCodeWrong: guard.wrong } : null,
+    guardNeeded: guard ? { domain: guard.domain, lastCodeWrong: guard.wrong } : ssGuard,
     tooltip,
     nowMs: Date.now(),
     dataDir,
@@ -406,6 +408,7 @@ function start() {
     pushState();
     return;
   }
+  cancelLoginSessions();
   if (!auth?.refreshToken) {
     emit('authRequired', { kind: 'login' });
     pushState();
@@ -430,43 +433,28 @@ function start() {
 function doLogin(params: Record<string, unknown>) {
   const code = typeof params.code === 'string' ? params.code.trim() : '';
 
-  // ¿Hay una petición de código de Steam Guard pendiente?
-  if (guard) {
-    if (!code) throw new Error('Falta el código de Steam Guard');
-    const cb = guard.callback;
-    guard = null;
-    loggingIn = true;
-    loginPhase = 'connecting';
-    log('Código de Steam Guard enviado');
-    pushState();
-    cb(code);
-    return;
+  if (code) {
+    if (submitSsCode(code)) return;
+    // Compatibilidad: código pedido por el flujo clásico de steam-user
+    if (guard) {
+      const cb = guard.callback;
+      guard = null;
+      loggingIn = true;
+      loginPhase = 'connecting';
+      log('Código de Steam Guard enviado');
+      pushState();
+      cb(code);
+      return;
+    }
+    throw new Error('No hay una solicitud de código activa');
   }
 
   const accountName = String(params.accountName ?? '').trim();
   const password = String(params.password ?? '');
   if (!accountName || !password) throw new Error('Usuario y contraseña requeridos');
 
-  if (user) {
-    try {
-      user.logOff();
-    } catch {
-      /* ignorar */
-    }
-  }
-  cancelQrSession();
-  loggingIn = true;
-  loginPhase = 'connecting';
-  lastError = null;
-  user = newClient();
   log(`Iniciando sesión como ${accountName}…`);
-  const opts: Record<string, unknown> = { accountName, password, machineName: cfg.machineName };
-  if (code) {
-    if (params.codeType === 'email') opts.authCode = code;
-    else opts.twoFactorCode = code;
-  }
-  user.logOn(opts as never);
-  pushState();
+  void startCredsLogin(accountName, password);
 }
 
 function doLogout() {
@@ -483,16 +471,16 @@ function doLogout() {
   force = null;
   lastError = null;
   loginPhase = 'idle';
-  cancelQrSession();
+  cancelLoginSessions();
   clearAuth();
   log('Sesión cerrada (token eliminado)');
   pushState();
   emit('authRequired', { kind: 'login', reason: 'Sesión cerrada' });
 }
 
-// ---------------------------------------------------------------- login por QR (steam-session)
+// ---------------------------------------------------------------- login con steam-session (QR y credenciales)
 
-function cancelQrSession() {
+function cancelLoginSessions() {
   if (qrSession) {
     try {
       qrSession.cancelLoginAttempt();
@@ -501,11 +489,103 @@ function cancelQrSession() {
     }
     qrSession = null;
   }
+  if (credsSession) {
+    try {
+      credsSession.cancelLoginAttempt();
+    } catch {
+      /* ignorar */
+    }
+    credsSession = null;
+  }
   qrDataUrl = null;
+  ssGuard = null;
+}
+
+function makeLoginSession(): LoginSession {
+  const session = new LoginSession(EAuthTokenPlatformType.SteamClient, {
+    machineId: true,
+    machineFriendlyName: cfg.machineName,
+  });
+  session.loginTimeout = 150_000;
+
+  session.on('remoteInteraction', () => {
+    if (!(session === qrSession || session === credsSession)) return;
+    loginPhase = 'awaiting_approval';
+    log(
+      session === qrSession
+        ? 'QR escaneado; esperando aprobación en la app móvil'
+        : 'Confirmación abierta en la app móvil; esperando aprobación',
+    );
+    pushState();
+  });
+
+  session.on('steamGuardMachineToken', () => {
+    log('Steam Guard: token de máquina recibido');
+  });
+
+  session.on('authenticated', () => {
+    finishLogin(session, session === qrSession ? 'qr' : 'creds');
+  });
+
+  session.on('timeout', () => onLoginSessionTimeout(session));
+  session.on('error', (e: Error & { eresult?: number }) => onLoginSessionError(session, e));
+
+  return session;
+}
+
+function finishLogin(session: LoginSession, method: 'qr' | 'creds') {
+  if (session === qrSession) qrSession = null;
+  if (session === credsSession) credsSession = null;
+  qrDataUrl = null;
+  ssGuard = null;
+  loginPhase = 'connecting';
+  saveAuth({
+    refreshToken: session.refreshToken,
+    steamID: session.steamID ? String(session.steamID) : undefined,
+  });
+  log(
+    `${method === 'qr' ? 'QR aprobado' : 'Sesión iniciada con credenciales'} (${session.accountName ?? 'cuenta'}); token guardado`,
+  );
+  if (user) {
+    try {
+      user.logOff();
+    } catch {
+      /* ignorar */
+    }
+    user = null;
+  }
+  start();
+}
+
+function onLoginSessionError(session: LoginSession, e: Error & { eresult?: number }) {
+  if (!(session === qrSession || session === credsSession)) return;
+  if (session === qrSession) qrSession = null;
+  if (session === credsSession) credsSession = null;
+  qrDataUrl = null;
+  ssGuard = null;
+  loggingIn = false;
+  loginPhase = 'idle';
+  lastError = { message: e.message ?? String(e), eresult: e.eresult };
+  log(`Error en el inicio de sesión: ${lastError.message}`);
+  pushState();
+}
+
+function onLoginSessionTimeout(session: LoginSession) {
+  const wasQr = session === qrSession;
+  if (!(wasQr || session === credsSession)) return;
+  if (wasQr) qrSession = null;
+  if (session === credsSession) credsSession = null;
+  qrDataUrl = null;
+  ssGuard = null;
+  loggingIn = false;
+  loginPhase = wasQr ? 'qr_expired' : 'idle';
+  if (!wasQr) lastError = { message: 'El intento de inicio de sesión caducó; inténtalo de nuevo' };
+  log(wasQr ? 'El código QR caducó sin completarse' : 'El intento de inicio de sesión caducó');
+  pushState();
 }
 
 function startQrLogin() {
-  cancelQrSession();
+  cancelLoginSessions();
   if (user && steamConnected) {
     log('Ya hay una sesión conectada');
     return;
@@ -514,59 +594,8 @@ function startQrLogin() {
   loginPhase = 'awaiting_qr';
   lastError = null;
 
-  const session = new LoginSession(EAuthTokenPlatformType.SteamClient, {
-    machineId: true,
-    machineFriendlyName: cfg.machineName,
-  });
-  session.loginTimeout = 150_000; // 2,5 min para escanear y aprobar
+  const session = makeLoginSession();
   qrSession = session;
-
-  session.on('remoteInteraction', () => {
-    if (qrSession === session) {
-      loginPhase = 'awaiting_approval';
-      log('QR escaneado; esperando aprobación en la app móvil');
-      pushState();
-    }
-  });
-
-  session.on('authenticated', () => {
-    if (qrSession === session) qrSession = null;
-    qrDataUrl = null;
-    loginPhase = 'connecting';
-    saveAuth({
-      refreshToken: session.refreshToken,
-      steamID: session.steamID ? String(session.steamID) : undefined,
-    });
-    log(`QR aprobado (${session.accountName ?? 'cuenta'}); token de sesión guardado`);
-    if (user) {
-      try {
-        user.logOff();
-      } catch {
-        /* ignorar */
-      }
-      user = null;
-    }
-    start();
-  });
-
-  session.on('timeout', () => {
-    if (qrSession !== session) return;
-    qrSession = null;
-    qrDataUrl = null;
-    loginPhase = 'qr_expired';
-    log('El código QR caducó sin completarse');
-    pushState();
-  });
-
-  session.on('error', (e: Error & { eresult?: number }) => {
-    if (qrSession !== session) return;
-    qrSession = null;
-    qrDataUrl = null;
-    loginPhase = 'idle';
-    lastError = { message: e.message ?? String(e), eresult: e.eresult };
-    log(`Error en el login por QR: ${lastError.message}`);
-    pushState();
-  });
 
   session
     .startWithQR()
@@ -576,14 +605,89 @@ function startQrLogin() {
       log('Código QR listo: escanéalo con la app móvil de Steam');
       pushState();
     })
-    .catch((e: Error & { eresult?: number }) => {
-      if (qrSession !== session) return;
-      qrSession = null;
+    .catch((e: Error & { eresult?: number }) => onLoginSessionError(session, e));
+}
+
+async function startCredsLogin(accountName: string, password: string) {
+  cancelLoginSessions();
+  if (user && steamConnected) {
+    log('Ya hay una sesión conectada');
+    return;
+  }
+
+  loggingIn = true;
+  loginPhase = 'connecting';
+  lastError = null;
+
+  const session = makeLoginSession();
+  credsSession = session;
+  pushState();
+
+  try {
+    const res = await session.startWithCredentials({ accountName, password });
+    if (credsSession !== session) return; // cancelado mientras tanto
+
+    if (!res.actionRequired) {
+      log('Credenciales aceptadas; esperando confirmación de Steam…');
+      pushState();
+      return;
+    }
+
+    const hasCode = res.validActions.some(
+      (a) => a.type === EAuthSessionGuardType.EmailCode || a.type === EAuthSessionGuardType.DeviceCode,
+    );
+    const hasConfirmation = res.validActions.some(
+      (a) => a.type === EAuthSessionGuardType.DeviceConfirmation || a.type === EAuthSessionGuardType.EmailConfirmation,
+    );
+    const email = res.validActions.find((a) => a.type === EAuthSessionGuardType.EmailCode)?.detail ?? null;
+
+    loggingIn = false;
+    if (hasCode) {
+      ssGuard = { domain: email, lastCodeWrong: false };
+      loginPhase = 'awaiting_guard';
+      log(
+        email
+          ? `Steam Guard: se necesita código del email (…${email})`
+          : 'Steam Guard: se necesita código de la app móvil',
+      );
+    } else if (hasConfirmation) {
+      loginPhase = 'awaiting_approval';
+      log('Aprueba el inicio de sesión en tu app móvil de Steam');
+    } else {
       loginPhase = 'idle';
+      lastError = { message: 'Steam pidió un método de verificación no soportado' };
+      log('Método de verificación no soportado');
+    }
+    pushState();
+  } catch (e) {
+    onLoginSessionError(session, e as Error & { eresult?: number });
+  }
+}
+
+function submitSsCode(code: string): boolean {
+  if (!credsSession || !ssGuard) return false;
+  const session = credsSession;
+  loggingIn = true;
+  loginPhase = 'connecting';
+  pushState();
+  session
+    .submitSteamGuardCode(code)
+    .then(() => {
+      if (credsSession !== session) return;
+      ssGuard = null;
+      log('Código aceptado; esperando confirmación de Steam…');
+      pushState();
+    })
+    .catch((e: Error & { eresult?: number }) => {
+      if (credsSession !== session) return;
+      loggingIn = false;
+      ssGuard = { domain: ssGuard ? ssGuard.domain : null, lastCodeWrong: true };
+      loginPhase = 'awaiting_guard';
       lastError = { message: e.message ?? String(e), eresult: e.eresult };
-      log(`No se pudo iniciar el login por QR: ${lastError.message}`);
+      log(`Código rechazado: ${lastError.message}`);
       pushState();
     });
+  return true;
 }
 
 // ---------------------------------------------------------------- comandos IPC
@@ -672,15 +776,20 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
         res(id, { started: true });
         break;
 
-      case 'cancelQrLogin':
-        cancelQrSession();
-        if (loginPhase === 'awaiting_qr' || loginPhase === 'awaiting_approval' || loginPhase === 'qr_expired') {
+      case 'cancelLogin':
+      case 'cancelQrLogin': {
+        const hadSession = !!(qrSession || credsSession);
+        cancelLoginSessions();
+        if (hadSession || loginPhase !== 'idle') {
+          loggingIn = false;
+          lastError = null;
           loginPhase = 'idle';
+          log('Intento de inicio de sesión cancelado');
+          pushState();
         }
-        log('Login por QR cancelado');
-        pushState();
         res(id, {});
         break;
+      }
 
       case 'getLogTail':
         res(id, { lines: readTail(Math.min(1000, Number(params.lines) || 200)) });
@@ -726,7 +835,7 @@ function shutdown(reason: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`Cerrando (${reason})`);
-  cancelQrSession();
+  cancelLoginSessions();
   try {
     user?.logOff();
   } catch {

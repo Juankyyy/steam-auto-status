@@ -38,9 +38,17 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
     if (guard) setTab('creds')
   }, [guard])
 
-  const switchTab = (next: 'qr' | 'creds') => {
-    setTab(next)
-    if (next === 'creds') void cmd('cancelQrLogin')
+  const goQr = () => {
+    if (tab === 'qr') return
+    setTab('qr')
+    void cmd('cancelLogin')
+    void cmd('startQrLogin')
+  }
+
+  const goCreds = () => {
+    if (tab === 'creds') return
+    setTab('creds')
+    void cmd('cancelLogin')
   }
 
   const submitCredentials = () => {
@@ -88,7 +96,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
                   ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              onClick={() => switchTab(t)}
+              onClick={() => (t === 'qr' ? goQr() : goCreds())}
             >
               {t === 'qr' ? 'Código QR' : 'Usuario y contraseña'}
             </button>
@@ -132,7 +140,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
                 variant="outline"
                 disabled={busy}
                 onClick={() => {
-                  void cmd('cancelQrLogin')
+                  void cmd('cancelLogin')
                   void cmd('startQrLogin')
                 }}
               >
@@ -151,7 +159,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
             <p className="text-sm text-muted-foreground">
               {guard.domain
                 ? `Steam envió un código a tu correo (termina en ${guard.domain}).`
-                : 'Introduce el código actual que muestra la app móvil de Steam (sección Steam Guard).'}
+                : 'Introduce el código actual que muestra la app móvil de Steam (sección Steam Guard), o aprueba la solicitud si te aparece en el móvil.'}
             </p>
             {guard.lastCodeWrong && (
               <Alert variant="destructive">
@@ -176,6 +184,21 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
               </Button>
             </div>
           </form>
+        ) : phase === 'awaiting_approval' ? (
+          <div className="grid gap-3">
+            <Alert>
+              <AlertTitle>Aprueba el inicio de sesión</AlertTitle>
+              <AlertDescription>
+                Steam te está pidiendo confirmación. Abre la app móvil de Steam y toca «Aceptar» en la solicitud de
+                inicio de sesión; esta ventana se conectará sola.
+              </AlertDescription>
+            </Alert>
+            <div>
+              <Button variant="outline" size="sm" onClick={() => void cmd('cancelLogin')}>
+                Cancelar
+              </Button>
+            </div>
+          </div>
         ) : (
           <form
             className="grid gap-4"
