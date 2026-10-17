@@ -70,6 +70,11 @@ export async function showMainWindow(): Promise<void> {
   if (isTauri) await invoke('show_main_window')
 }
 
+export async function isHiddenLaunch(): Promise<boolean> {
+  if (!isTauri) return false
+  return await invoke<boolean>('launch_hidden')
+}
+
 export async function setAutostart(enable: boolean): Promise<void> {
   if (isTauri) await invoke('set_autostart', { enable })
 }

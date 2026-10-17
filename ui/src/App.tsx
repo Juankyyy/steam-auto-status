@@ -5,7 +5,7 @@ import { StatusPanel } from '@/components/StatusPanel'
 import { TestsPanel } from '@/components/TestsPanel'
 import { Badge } from '@/components/ui/badge'
 import { TooltipProvider } from '@/components/ui/tooltip'
-import { cmd, getCachedState, isTauri, onSidecarMessage, showMainWindow, type AppState } from '@/lib/tauri'
+import { cmd, getCachedState, isHiddenLaunch, isTauri, onSidecarMessage, showMainWindow, type AppState } from '@/lib/tauri'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -18,32 +18,45 @@ export default function App() {
     let unlisten: (() => void) | undefined
 
     void (async () => {
-      const initial = await getCachedState()
-      if (!disposed && initial) setState(initial)
-
-      if (isTauri) {
-        await showMainWindow()
-        void cmd('getLogTail', { lines: 200 })
-
-        unlisten = await onSidecarMessage((msg) => {
-          if (msg.type === 'event') {
-            if (msg.event === 'state') {
-              const s = msg.data as AppState
-              setState(s)
-              if (s.connection === 'connected') setNeedLogin(false)
-            } else if (msg.event === 'log') {
-              const line = (msg.data as { line?: string } | undefined)?.line
-              if (line) setLogs((prev) => [...prev.slice(-400), line])
-            } else if (msg.event === 'authRequired') {
-              const d = msg.data as { reason?: string } | undefined
-              setNeedLogin(true)
-              setLoginReason(d?.reason ?? null)
+      try {
+        // 1º registramos el listener: aunque algo falle después, el panel seguirá recibiendo estado
+        if (isTauri) {
+          unlisten = await onSidecarMessage((msg) => {
+            if (disposed) return
+            if (msg.type === 'event') {
+              if (msg.event === 'state') {
+                const s = msg.data as AppState
+                setState(s)
+                if (s.connection === 'connected') setNeedLogin(false)
+              } else if (msg.event === 'log') {
+                const line = (msg.data as { line?: string } | undefined)?.line
+                if (line) setLogs((prev) => [...prev.slice(-400), line])
+              } else if (msg.event === 'authRequired') {
+                const d = msg.data as { reason?: string } | undefined
+                setNeedLogin(true)
+                setLoginReason(d?.reason ?? null)
+              }
+            } else if (msg.type === 'res') {
+              const lines = (msg.result as { lines?: string[] } | undefined)?.lines
+              if (Array.isArray(lines)) setLogs(lines)
             }
-          } else if (msg.type === 'res') {
-            const lines = (msg.result as { lines?: string[] } | undefined)?.lines
-            if (Array.isArray(lines)) setLogs(lines)
+          })
+        }
+
+        // Estado cacheado inicial (puede llegar null justo al arrancar; los eventos lo rellenan)
+        const initial = await getCachedState()
+        if (!disposed && initial) setState(initial)
+
+        if (isTauri) {
+          void cmd('getLogTail', { lines: 200 })
+          try {
+            if (!(await isHiddenLaunch())) await showMainWindow()
+          } catch (e) {
+            console.error('No se pudo mostrar la ventana:', e)
           }
-        })
+        }
+      } catch (e) {
+        console.error('Fallo al inicializar el panel:', e)
       }
     })()
 

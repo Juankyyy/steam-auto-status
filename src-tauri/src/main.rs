@@ -128,8 +128,25 @@ fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
                         let app_err = app.clone();
                         let shared_err = shared.clone();
                         std::thread::spawn(move || {
+                            // Persistimos el stderr del sidecar para diagnosticar cierres inesperados
+                            let log_path = data_dir(&app_err).join("logs").join("sidecar-stderr.log");
+                            if let Some(parent) = log_path.parent() {
+                                let _ = std::fs::create_dir_all(parent);
+                            }
+                            let mut file = std::fs::OpenOptions::new()
+                                .create(true)
+                                .append(true)
+                                .open(&log_path)
+                                .ok();
                             let reader = BufReader::new(stderr);
                             for line in reader.lines().map_while(Result::ok) {
+                                if let Some(f) = file.as_mut() {
+                                    let ts = std::time::SystemTime::now()
+                                        .duration_since(std::time::UNIX_EPOCH)
+                                        .map(|d| d.as_secs())
+                                        .unwrap_or(0);
+                                    let _ = writeln!(f, "[{ts}] {line}");
+                                }
                                 push_log(&shared_err, format!("sidecar(stderr): {line}"));
                                 let _ = app_err.emit("sidecar-message", json!({
                                     "type": "event",
@@ -300,6 +317,12 @@ fn show_main_window(app: AppHandle) {
     show_window(&app);
 }
 
+/// true si la app se lanzó con --hidden (arranque automático con Windows)
+#[tauri::command]
+fn launch_hidden() -> bool {
+    std::env::args().any(|a| a == "--hidden")
+}
+
 #[tauri::command]
 fn set_autostart(app: AppHandle, enable: bool) -> Result<(), String> {
     let manager = app.autolaunch();
@@ -451,6 +474,7 @@ fn main() {
             get_cached_state,
             sidecar_command,
             show_main_window,
+            launch_hidden,
             set_autostart,
             quit_app
         ])
