@@ -151,9 +151,10 @@ Pantalla única (ventana ~900×620) con tres zonas y tema oscuro por defecto:
      y la expone en el estado (`qrDataUrl`). Fases: `awaiting_qr` → (escaneo)
      `awaiting_approval` → `connecting` → conectado. Caduca a los 2,5 min (`qr_expired`)
      con botón de regenerar.
-   - **Pestaña "Usuario y contraseña"**: flujo clásico con `steam-user` (código Steam Guard
-     cuando corresponda; el campo ya no se bloquea — el estado `loginPhase` separa
-     "esperando código" de "conectando").
+   - **Pestaña "Usuario y contraseña"**: también con `steam-session`
+     (`startWithCredentials`): si Steam pide confirmación desde la app móvil, el panel lo
+     indica y se completa al aprobar; si pide código (email o app), aparece el campo de
+     código (`submitSteamGuardCode`, con manejo de "código incorrecto → esperar 30 s").
 
 Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
 `emit` al webview.
@@ -274,9 +275,11 @@ Disco instalado estimado: ~60–90 MB.
 - [x] Sidecar (lógica del núcleo + IPC stdio + postbuild de `system.pem`)
 - [x] Shell (bandeja, ventana bajo demanda, supervisión del sidecar, plugins)
 - [x] UI shadcn (estado con cuenta atrás / configuración / pruebas+log + formulario 2FA)
-- [x] Bloque 1 del login: fix del campo de código (`loginPhase`) + login por QR con
-      `steam-session`/`qrcode` — pendiente de prueba del usuario
-- [ ] Bloque 2 del login: credenciales v2 con aprobación desde la app móvil
+- [x] Bloque 1 del login (verificado por el usuario): fix del campo de código +
+      login por QR con `steam-session`/`qrcode`
+- [ ] Bloque 2 del login (en curso, sin push hasta verificación): credenciales con
+      `steam-session` (aprobación desde móvil / código) + volcado de errores del sidecar a
+      `sidecar-stderr.log`
 - [ ] Prueba manual completa del usuario (login, forzados, franjas, bandeja)
 - [ ] Empaquetado del sidecar (runtime Node o SEA) + instalador NSIS
 - [ ] README final
