@@ -1,5 +1,5 @@
-import { ConfigPanel } from '@/components/ConfigPanel'
 import { LoginPanel } from '@/components/LoginPanel'
+import { ScheduleCard } from '@/components/ScheduleCard'
 import { StatusPanel } from '@/components/StatusPanel'
 import { TestsPanel } from '@/components/TestsPanel'
 import { useAppContext } from '@/lib/app-context'
@@ -26,7 +26,7 @@ export function Dashboard() {
       )}
 
       <div className="grid items-start gap-6 xl:grid-cols-2">
-        <ConfigPanel state={state} />
+        <ScheduleCard state={state} />
         <TestsPanel state={state} logs={logs} />
       </div>
     </div>

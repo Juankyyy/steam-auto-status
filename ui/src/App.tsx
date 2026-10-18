@@ -31,6 +31,8 @@ export default function App() {
               } else if (msg.event === 'log') {
                 const line = (msg.data as { line?: string } | undefined)?.line
                 if (line) setLogs((prev) => [...prev.slice(-400), line])
+              } else if (msg.event === 'logsCleared') {
+                setLogs([])
               } else if (msg.event === 'authRequired') {
                 const d = msg.data as { reason?: string } | undefined
                 setNeedLogin(true)

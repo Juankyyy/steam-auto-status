@@ -7,7 +7,7 @@
 //! - Panel window (WebView2), created on demand and destroyed on close
 //!   to free resources (the app lives in the tray).
 //! - Node sidecar supervision (startup, restart with backoff, stdio IPC).
-//! - Plugins: single instance, autostart, notifications.
+//! - Plugins: single instance, autostart, notifications, opener, clipboard.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -21,7 +21,9 @@ use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
+use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_notification::NotificationExt;
+use tauri_plugin_opener::OpenerExt;
 
 static QUITTING: AtomicBool = AtomicBool::new(false);
 static CMD_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
@@ -351,6 +353,32 @@ fn set_autostart(app: AppHandle, enable: bool) -> Result<(), String> {
     }
 }
 
+/// Opens the app data folder (config, token, logs) in the system file manager.
+#[tauri::command]
+fn open_data_folder(app: AppHandle) -> Result<(), String> {
+    let dir = data_dir(&app);
+    app.opener()
+        .open_path(dir.to_string_lossy().to_string(), None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Opens an external link with the default browser (http/https only).
+#[tauri::command]
+fn open_url(app: AppHandle, url: String) -> Result<(), String> {
+    if !url.starts_with("https://") && !url.starts_with("http://") {
+        return Err("Solo se permiten enlaces http/https".into());
+    }
+    app.opener()
+        .open_url(url, None::<&str>)
+        .map_err(|e| e.to_string())
+}
+
+/// Copies text to the system clipboard (settings › copy diagnostics).
+#[tauri::command]
+fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
+    app.clipboard().write_text(text).map_err(|e| e.to_string())
+}
+
 #[tauri::command]
 fn quit_app(app: AppHandle, shared: tauri::State<'_, Arc<Shared>>) {
     QUITTING.store(true, Ordering::SeqCst);
@@ -488,12 +516,17 @@ fn main() {
             Some(vec!["--hidden"]),
         ))
         .plugin(tauri_plugin_notification::init())
+        .plugin(tauri_plugin_opener::init())
+        .plugin(tauri_plugin_clipboard_manager::init())
         .invoke_handler(tauri::generate_handler![
             get_cached_state,
             sidecar_command,
             show_main_window,
             launch_hidden,
             set_autostart,
+            open_data_folder,
+            open_url,
+            copy_text,
             quit_app
         ])
         .setup(|app| {

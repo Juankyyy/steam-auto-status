@@ -18,7 +18,6 @@ export interface Config {
   onlineUntil: string
   paused: boolean
   startWithWindows: boolean
-  startMinimized: boolean
   notifications: boolean
   machineName: string
 }
@@ -77,6 +76,21 @@ export async function isHiddenLaunch(): Promise<boolean> {
 
 export async function setAutostart(enable: boolean): Promise<void> {
   if (isTauri) await invoke('set_autostart', { enable })
+}
+
+/** Opens the app data folder (config, token, logs) in the system file manager. */
+export async function openDataFolder(): Promise<void> {
+  if (isTauri) await invoke('open_data_folder')
+}
+
+/** Opens an external http/https link in the default browser. */
+export async function openUrl(url: string): Promise<void> {
+  if (isTauri) await invoke('open_url', { url })
+}
+
+/** Copies text to the system clipboard (settings › copy diagnostics). */
+export async function copyText(text: string): Promise<void> {
+  if (isTauri) await invoke('copy_text', { text })
 }
 
 export async function onSidecarMessage(handler: (msg: SidecarMessage) => void): Promise<() => void> {

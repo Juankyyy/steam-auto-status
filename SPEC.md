@@ -113,11 +113,11 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
 
 - Shell → sidecar: `{ "type":"cmd", "id":"…", "method":"…", "params":{} }`
   con métodos: `getState`, `getConfig`, `setConfig`, `forceState`, `pause`, `resume`,
-  `login`, `logout`, `getLogTail`.
+  `login`, `logout`, `getLogTail`, `clearLog`.
 - Sidecar → shell: `{ "type":"res", "id":"…", "result":{} }` o `{ "type":"res",
   "id":"…", "error":{} }`.
-- Eventos sidecar → shell: `{ "type":"event", "event":"state|log|connection|authRequired|
-  configChanged", "data":{} }`.
+- Eventos sidecar → shell: `{ "type":"event", "event":"state|log|logsCleared|connection|
+  authRequired|configChanged", "data":{} }`.
 
 ### 4.3 Shell Tauri (Rust) — `src-tauri/`
 
@@ -132,6 +132,9 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
   existente (evita dos sesiones `steam-user` expulsándose y temporizadores duplicados).
 - **Autostart** (`tauri-plugin-autostart`): registro Run con `--hidden`.
 - **Notificaciones** (`tauri-plugin-notification`): toast al cambiar de estado (toggle).
+- **Ajustes de sistema** (`tauri-plugin-opener` + `tauri-plugin-clipboard-manager`):
+  comandos `open_data_folder` (abre la carpeta de datos en el Explorador), `open_url`
+  (enlaces externos en el navegador) y `copy_text` (copia el diagnóstico al portapapeles).
 - Resuelve la carpeta de Documentos del usuario (`BaseDirectory::Document`) y se la pasa al
   sidecar como `--data-dir`.
 
@@ -147,8 +150,8 @@ el panel de control del módulo de ajustes.
 
 1. **Estado**: "Conectado (dentro de ventana)" / "Invisible" + cuenta atrás a la próxima
    transición ("Online en 2 h 14 min" / "Invisible a la 01:00").
-2. **Configuración**: hora inicio/fin, chips de días (L–V), interruptor general
-   activar/pausar, iniciar con Windows, notificaciones, carpeta de datos.
+2. **Programación**: resumen del horario, interruptor rápido activar/pausar y enlace
+   "Editar en Ajustes".
 3. **Pruebas + log**: forzar Conectado / Invisible durante X minutos; log en vivo; estado de
    conexión con Steam (conectado/reintentando).
 4. **Primer login** (visible cuando el sidecar emite `authRequired`):
@@ -162,9 +165,21 @@ el panel de control del módulo de ajustes.
      indica y se completa al aprobar; si pide código (email o app), aparece el campo de
      código (`submitSteamGuardCode`, con manejo de "código incorrecto → esperar 30 s").
 
-**Ajustes** (`/settings`): de momento un *placeholder*; su contenido se definirá en la
-siguiente iteración (previsiblemente recogerá la configuración hoy integrada en el panel
-de control).
+**Ajustes** (`/settings`): configuración persistente y mantenimiento, organizada en
+tarjetas:
+
+- **Horario**: horas inicio/fin, días de la semana, resumen de la franja (día, horas y
+  duración) y botón para restaurar los valores por defecto.
+- **Cuenta de Steam**: cuenta conectada (nombre + SteamID), botón Reconectar, nombre de
+  máquina (`machineName`) y cerrar sesión (borra el token).
+- **Aplicación**: iniciar con Windows y notificaciones.
+- **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, vaciar
+  `status.log` y copiar un diagnóstico (versión, estado y últimas líneas del registro)
+  para reportar problemas.
+- **Acerca de**: versión y enlaces al repositorio, última release e issues.
+
+Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
+conserva el resumen del horario y la pausa rápida.
 
 Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
 `emit` al webview.
@@ -218,7 +233,6 @@ Ejemplo de `config.json`:
   "onlineUntil": "01:00",
   "paused": false,
   "startWithWindows": false,
-  "startMinimized": true,
   "notifications": false,
   "machineName": "AutoStatus"
 }

@@ -28,7 +28,6 @@ interface Config {
   onlineUntil: string;
   paused: boolean;
   startWithWindows: boolean;
-  startMinimized: boolean;
   notifications: boolean;
   machineName: string;
 }
@@ -44,7 +43,6 @@ const DEFAULT_CONFIG: Config = {
   onlineUntil: '01:00',
   paused: false,
   startWithWindows: false,
-  startMinimized: true,
   notifications: false,
   machineName: 'AutoStatus',
 };
@@ -137,7 +135,6 @@ function sanitizeConfig(raw: Record<string, unknown>): Config {
     onlineUntil: normTime(raw.onlineUntil) ?? DEFAULT_CONFIG.onlineUntil,
     paused: !!raw.paused,
     startWithWindows: !!raw.startWithWindows,
-    startMinimized: !!raw.startMinimized,
     notifications: !!raw.notifications,
     machineName,
   };
@@ -793,6 +790,17 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
 
       case 'getLogTail':
         res(id, { lines: readTail(Math.min(1000, Number(params.lines) || 200)) });
+        break;
+
+      case 'clearLog':
+        try {
+          fs.writeFileSync(logPath, '');
+        } catch {
+          /* ignore */
+        }
+        emit('logsCleared', {});
+        log('Registro vaciado por el usuario');
+        res(id, {});
         break;
 
       default:
