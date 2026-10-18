@@ -79,6 +79,11 @@ it again. If it persists, check `logs\sidecar-stderr.log` and
 **How do I close it completely?** — Tray icon → **Quit**. If "Start with Windows" is
 enabled, disable it first or the app will come back on reboot.
 
+**How do I update?** — Download the new installer from the
+[latest release](https://github.com/Juankyyy/steam-auto-status/releases/latest) and run it
+on top of your current version: your config, token and logs are kept and you won't need to
+sign in again.
+
 **Does my PC need to stay on?** — Yes: the app must be running to update your status.
 Enable **Start with Windows** so it's always there.
 
