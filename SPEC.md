@@ -350,3 +350,4 @@ Disco instalado estimado: ~60–90 MB.
 - **Estilo de las release notes**: en inglés, **con emojis** y formato amigable
   (highlights + instalación + requisitos). El cuerpo publicado en GitHub debe ser igual a
   `release-notes/vX.Y.Z.md`.
+- **Aviso previo**: no se hacen commits ni pushes sin previo aviso al usuario.
