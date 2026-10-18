@@ -1,13 +1,13 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 
-//! Steam Auto Status — shell de escritorio (Tauri v2)
+//! Steam Auto Status — desktop shell (Tauri v2)
 //!
-//! Responsabilidades:
-//! - Icono en la bandeja del sistema con menú contextual y tooltip dinámico.
-//! - Ventana del panel (WebView2), creada bajo demanda y destruida al cerrar
-//!   para liberar recursos (la app vive en la bandeja).
-//! - Supervisión del sidecar Node (arranque, reinicio con backoff, IPC stdio).
-//! - Plugins: instancia única, autostart, notificaciones.
+//! Responsibilities:
+//! - System tray icon with context menu and dynamic tooltip.
+//! - Panel window (WebView2), created on demand and destroyed on close
+//!   to free resources (the app lives in the tray).
+//! - Node sidecar supervision (startup, restart with backoff, stdio IPC).
+//! - Plugins: single instance, autostart, notifications.
 
 use std::collections::VecDeque;
 use std::io::{BufRead, BufReader, Write};
@@ -26,7 +26,7 @@ use tauri_plugin_notification::NotificationExt;
 static QUITTING: AtomicBool = AtomicBool::new(false);
 static CMD_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
 
-/// Estado compartido entre hilos (lector del sidecar, comandos, bandeja).
+/// State shared between threads (sidecar reader, commands, tray).
 #[derive(Default)]
 struct Shared {
     state: Mutex<Option<Value>>,
@@ -35,7 +35,7 @@ struct Shared {
     child: Mutex<Option<Child>>,
 }
 
-/// Handles de la bandeja para actualizar el estado visual desde el hilo lector.
+/// Tray handles to update the visual state from the reader thread.
 struct TrayUi {
     pause: CheckMenuItem<tauri::Wry>,
     autostart: CheckMenuItem<tauri::Wry>,
@@ -59,10 +59,10 @@ fn data_dir(app: &AppHandle) -> std::path::PathBuf {
     dir
 }
 
-/// Quita el prefijo de ruta extendida (`\\?\`, `\\?\UNC\`) que `canonicalize()` agrega en
-/// Windows y que Tauri aplica al resolver la carpeta de recursos. Node no sabe resolver ese
-/// prefijo cuando llega como `argv[1]` (falla con `EISDIR`/`ENOENT`), así que lo limpiamos
-/// antes de construir la línea de comandos.
+/// Removes the extended path prefix (`\\?\`, `\\?\UNC\`) that `canonicalize()` adds on
+/// Windows and that Tauri applies when resolving the resource folder. Node can't resolve
+/// that prefix when it arrives as `argv[1]` (it fails with `EISDIR`/`ENOENT`), so we strip
+/// it before building the command line.
 fn strip_extended_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
     let s = path.to_string_lossy();
     if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
@@ -74,7 +74,7 @@ fn strip_extended_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
     }
 }
 
-/// Programa + argumentos para lanzar el sidecar (dev: node + bundle; prod: runtime empaquetado).
+/// Program + arguments to launch the sidecar (dev: node + bundle; prod: bundled runtime).
 fn sidecar_launch(app: &AppHandle) -> (std::path::PathBuf, Vec<String>) {
     let dir = data_dir(app);
     let dir_arg = dir.to_string_lossy().to_string();
@@ -94,8 +94,8 @@ fn sidecar_launch(app: &AppHandle) -> (std::path::PathBuf, Vec<String>) {
             ],
         )
     } else {
-        // `resource_dir()` canonicaliza el exe: en Windows eso produce `\\?\C:\...`,
-        // que Node no puede resolver como argumento. Lo normalizamos.
+        // `resource_dir()` canonicalizes the exe: on Windows that produces `\\?\C:\...`,
+        // which Node can't resolve as an argument. We normalize it.
         let res = strip_extended_prefix(
             app.path()
                 .resource_dir()
@@ -146,7 +146,7 @@ fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
                         let app_err = app.clone();
                         let shared_err = shared.clone();
                         std::thread::spawn(move || {
-                            // Persistimos el stderr del sidecar para diagnosticar cierres inesperados
+                            // Persist the sidecar stderr to diagnose unexpected exits
                             let log_path = data_dir(&app_err).join("logs").join("sidecar-stderr.log");
                             if let Some(parent) = log_path.parent() {
                                 let _ = std::fs::create_dir_all(parent);
@@ -280,7 +280,7 @@ fn attach_window_events(window: &tauri::WebviewWindow) {
     let w = window.clone();
     window.on_window_event(move |event| {
         if let WindowEvent::CloseRequested { api, .. } = event {
-            // Cerrar la ventana NO termina la app: se destruye para liberar WebView2.
+            // Closing the window does NOT quit the app: it is destroyed to free WebView2.
             api.prevent_close();
             let _ = w.destroy();
         }
@@ -309,7 +309,7 @@ fn show_window(app: &AppHandle) {
     }
 }
 
-// ---------------------------------------------------------------- comandos expuestos a la UI
+// ---------------------------------------------------------------- commands exposed to the UI
 
 #[tauri::command]
 fn get_cached_state(shared: tauri::State<'_, Arc<Shared>>) -> Value {
@@ -335,7 +335,7 @@ fn show_main_window(app: AppHandle) {
     show_window(&app);
 }
 
-/// true si la app se lanzó con --hidden (arranque automático con Windows)
+/// true if the app was launched with --hidden (Windows auto-start)
 #[tauri::command]
 fn launch_hidden() -> bool {
     std::env::args().any(|a| a == "--hidden")
@@ -360,7 +360,7 @@ fn quit_app(app: AppHandle, shared: tauri::State<'_, Arc<Shared>>) {
     app.exit(0);
 }
 
-// ---------------------------------------------------------------- bandeja
+// ---------------------------------------------------------------- tray
 
 fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
     let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);

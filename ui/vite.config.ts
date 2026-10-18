@@ -11,7 +11,7 @@ export default defineConfig({
       '@': path.resolve(import.meta.dirname, './src'),
     },
   },
-  // Config recomendada por Tauri para el dev server
+  // Config recommended by Tauri for the dev server
   clearScreen: false,
   server: {
     port: 5173,

@@ -1,16 +1,16 @@
 /**
- * Descarga el runtime de Node que se empaqueta con la app.
+ * Downloads the Node runtime that gets bundled with the app.
  *
- * La app instalada lanza `<instalación>\runtime\node.exe` con
- * `<instalación>\sidecar\sidecar.cjs` (ver `src-tauri/src/main.rs`, rama de
- * release), así que en tiempo de build necesitamos un `node.exe` oficial en
- * `src-tauri/runtime/node.exe` — carpeta ignorada por git.
+ * The installed app launches `<installation>\runtime\node.exe` with
+ * `<installation>\sidecar\sidecar.cjs` (see `src-tauri/src/main.rs`, release
+ * branch), so at build time we need an official `node.exe` in
+ * `src-tauri/runtime/node.exe` — a folder ignored by git.
  *
- * · Versión fijada = la del entorno de desarrollo (Node v24.12.0, win-x64).
- * · El SHA256 se verifica contra el oficial publicado en nodejs.org/dist.
- * · Si el archivo ya existe y su hash coincide, no se descarga nada.
+ * · Pinned version = the one in the development environment (Node v24.12.0, win-x64).
+ * · The SHA256 is verified against the official one published on nodejs.org/dist.
+ * · If the file already exists and its hash matches, nothing is downloaded.
  *
- * Uso: node scripts/fetch-node-runtime.mjs [--force]
+ * Usage: node scripts/fetch-node-runtime.mjs [--force]
  */
 
 import { createHash } from 'node:crypto';
@@ -25,7 +25,7 @@ import {
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-/** Versión y hash del node.exe win-x64 oficial (dist/v24.12.0/SHASUMS256.txt). */
+/** Version and hash of the official win-x64 node.exe (dist/v24.12.0/SHASUMS256.txt). */
 const NODE_VERSION = '24.12.0';
 const NODE_SHA256 = '2ffe3acc0458fdde999f50d11809bbe7c9b7ef204dcf17094e325d26ace101d8';
 
@@ -36,7 +36,7 @@ const downloadUrl = `https://nodejs.org/dist/v${NODE_VERSION}/win-x64/node.exe`;
 
 const force = process.argv.includes('--force');
 
-/** SHA256 de un archivo, en hexadecimal. */
+/** SHA256 of a file, in hexadecimal. */
 function sha256(file) {
   return createHash('sha256').update(readFileSync(file)).digest('hex');
 }
@@ -44,18 +44,18 @@ function sha256(file) {
 async function main() {
   if (existsSync(outFile) && !force) {
     if (sha256(outFile) === NODE_SHA256) {
-      console.log(`runtime: node.exe v${NODE_VERSION} ya está listo en src-tauri/runtime/`);
+      console.log(`runtime: node.exe v${NODE_VERSION} already present in src-tauri/runtime/`);
       return;
     }
-    console.log('runtime: node.exe existente con hash inesperado; se vuelve a descargar');
+    console.log('runtime: existing node.exe has an unexpected hash; downloading again');
   }
 
   mkdirSync(outDir, { recursive: true });
-  console.log(`runtime: descargando node.exe v${NODE_VERSION} win-x64…`);
+  console.log(`runtime: downloading node.exe v${NODE_VERSION} win-x64…`);
 
   const res = await fetch(downloadUrl);
   if (!res.ok) {
-    throw new Error(`HTTP ${res.status} al descargar ${downloadUrl}`);
+    throw new Error(`HTTP ${res.status} downloading ${downloadUrl}`);
   }
 
   const tmpFile = `${outFile}.tmp`;
@@ -65,12 +65,12 @@ async function main() {
   if (actual !== NODE_SHA256) {
     rmSync(tmpFile, { force: true });
     throw new Error(
-      `SHA256 no coincide (esperado ${NODE_SHA256}, obtenido ${actual}); descarga abortada`,
+      `SHA256 mismatch (expected ${NODE_SHA256}, got ${actual}); download aborted`,
     );
   }
 
   renameSync(tmpFile, outFile);
-  console.log(`runtime: node.exe v${NODE_VERSION} verificado y guardado en src-tauri/runtime/`);
+  console.log(`runtime: node.exe v${NODE_VERSION} verified and saved to src-tauri/runtime/`);
 }
 
 main().catch((err) => {

@@ -55,7 +55,7 @@ export interface SidecarMessage {
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-/** Envía un comando al sidecar (fire-and-forget; el estado llega por eventos). */
+/** Sends a command to the sidecar (fire-and-forget; state arrives via events). */
 export async function cmd(method: string, params: Record<string, unknown> = {}): Promise<void> {
   if (!isTauri) return
   await invoke('sidecar_command', { method, params })

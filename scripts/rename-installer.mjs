@@ -1,11 +1,11 @@
 /**
- * Renombra el instalador NSIS al formato de publicación de las releases:
+ * Renames the NSIS installer to the release publishing format:
  *
  *   steam-auto-status_<version>_x64-setup.exe
  *
- * (sin espacios ni mayúsculas). Lo renombra dentro de su propia carpeta
- * (`src-tauri/target/release/bundle/nsis/`) y falla si no encuentra el instalador,
- * para no publicar nunca un artefacto con el nombre equivocado.
+ * (no spaces or uppercase). It renames it inside its own folder
+ * (`src-tauri/target/release/bundle/nsis/`) and fails if it can't find the
+ * installer, so an artifact with the wrong name is never published.
  */
 
 import { existsSync, readFileSync, readdirSync, renameSync, rmSync } from 'node:fs';
@@ -22,31 +22,31 @@ const targetName = `steam-auto-status_${version}_x64-setup.exe`;
 const targetPath = join(nsisDir, targetName);
 
 if (!existsSync(nsisDir)) {
-  console.error(`rename-installer: no existe ${nsisDir} (¿corriste "npm run build"?).`);
+  console.error(`rename-installer: ${nsisDir} does not exist (did you run "npm run build"?).`);
   process.exit(1);
 }
 
-// Instaladores recién generados por tauri (todavía con espacios/mayúsculas).
+// Freshly generated installers from tauri (still with spaces/uppercase).
 const pending = readdirSync(nsisDir).filter(
   (file) => file.endsWith('_x64-setup.exe') && !file.startsWith('steam-auto-status_'),
 );
 
 if (pending.length === 0) {
   if (existsSync(targetPath)) {
-    console.log(`rename-installer: ya está como ${targetName}`);
+    console.log(`rename-installer: already named ${targetName}`);
     process.exit(0);
   }
-  console.error(`rename-installer: no hay instaladores *_x64-setup.exe en ${nsisDir}.`);
+  console.error(`rename-installer: no *_x64-setup.exe installers in ${nsisDir}.`);
   process.exit(1);
 }
 
 if (pending.length > 1) {
   console.error(
-    `rename-installer: hay varios instaladores; borrá los viejos y reintentá: ${pending.join(', ')}`,
+    `rename-installer: multiple installers found; delete the old ones and retry: ${pending.join(', ')}`,
   );
   process.exit(1);
 }
 
-rmSync(targetPath, { force: true }); // por si quedó el renombrado de una build anterior
+rmSync(targetPath, { force: true }); // in case the rename from a previous build was left behind
 renameSync(join(nsisDir, pending[0]), targetPath);
 console.log(`rename-installer: ${pending[0]} -> ${targetName}`);

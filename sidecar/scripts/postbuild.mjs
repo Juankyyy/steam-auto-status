@@ -1,9 +1,9 @@
 /**
- * Post-build del sidecar.
+ * Sidecar post-build.
  *
- * esbuild empaqueta todo en dist/sidecar.cjs, pero @doctormckay/steam-crypto
- * lee `system.pem` en tiempo de ejecución relativo a __dirname. Como __dirname
- * pasa a ser la carpeta dist/, copiamos el archivo junto al bundle.
+ * esbuild bundles everything into dist/sidecar.cjs, but @doctormckay/steam-crypto
+ * reads `system.pem` at runtime relative to __dirname. Since __dirname becomes
+ * the dist/ folder, we copy the file next to the bundle.
  */
 
 import { copyFileSync, mkdirSync } from 'node:fs';
@@ -21,4 +21,4 @@ const outDir = join(here, '..', 'dist');
 mkdirSync(outDir, { recursive: true });
 
 copyFileSync(pemSource, join(outDir, 'system.pem'));
-console.log('postbuild: system.pem copiado a dist/');
+console.log('postbuild: system.pem copied to dist/');

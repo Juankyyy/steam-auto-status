@@ -1,11 +1,11 @@
 /**
- * Steam Auto Status — sidecar (núcleo)
+ * Steam Auto Status — sidecar (core)
  *
- * Mantiene una sesión de Steam 24/7 y cambia la presencia (Conectado/Invisible)
- * según el horario configurado. Se comunica con el shell Tauri por stdin/stdout
- * con mensajes JSON de una línea.
+ * Keeps a Steam session running 24/7 and switches presence (Online/Invisible)
+ * according to the configured schedule. It communicates with the Tauri shell
+ * over stdin/stdout with one-line JSON messages.
  *
- * Uso: node dist/sidecar.cjs --data-dir <carpeta>
+ * Usage: node dist/sidecar.cjs --data-dir <folder>
  */
 
 import SteamUser from 'steam-user';
@@ -15,7 +15,7 @@ import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
 
-// ---------------------------------------------------------------- tipos
+// ---------------------------------------------------------------- types
 
 const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 type Day = (typeof DAYS)[number];
@@ -49,7 +49,7 @@ const DEFAULT_CONFIG: Config = {
   machineName: 'AutoStatus',
 };
 
-// ---------------------------------------------------------------- argumentos y rutas
+// ---------------------------------------------------------------- arguments and paths
 
 function getArg(name: string): string | undefined {
   const i = process.argv.indexOf(name);
@@ -85,7 +85,7 @@ function rotateLogIfNeeded() {
     const st = fs.statSync(logPath);
     if (st.size > 1_000_000) fs.renameSync(logPath, logPath + '.1');
   } catch {
-    /* no existe o no se puede rotar: ignorar */
+    /* doesn't exist or can't be rotated: ignore */
   }
 }
 
@@ -96,7 +96,7 @@ function log(msg: string) {
     rotateLogIfNeeded();
     fs.appendFileSync(logPath, line + '\n');
   } catch {
-    /* sin permiso de escritura: el evento sigue saliendo por IPC */
+    /* no write permission: the event still goes out over IPC */
   }
   emit('log', { line });
 }
@@ -110,7 +110,7 @@ function readTail(n: number): string[] {
   }
 }
 
-// ---------------------------------------------------------------- configuración
+// ---------------------------------------------------------------- configuration
 
 let cfg: Config = structuredClone(DEFAULT_CONFIG);
 
@@ -147,13 +147,13 @@ function loadConfig() {
   try {
     fs.mkdirSync(dataDir, { recursive: true });
   } catch {
-    /* ignorar */
+    /* ignore */
   }
   if (!fs.existsSync(configPath)) {
     try {
       fs.writeFileSync(configPath, JSON.stringify(DEFAULT_CONFIG, null, 2));
     } catch {
-      /* ignorar */
+      /* ignore */
     }
   }
   try {
@@ -199,11 +199,11 @@ function clearAuth() {
   try {
     fs.rmSync(authPath, { force: true });
   } catch {
-    /* ignorar */
+    /* ignore */
   }
 }
 
-// ---------------------------------------------------------------- horario
+// ---------------------------------------------------------------- schedule
 
 const DAY_MS = 86_400_000;
 
@@ -220,10 +220,10 @@ function windowDurationMs(c: Config): number {
   return (parseHM(c.onlineUntil) - parseHM(c.onlineFrom) + DAY_MS) % DAY_MS;
 }
 
-/** ¿Estamos dentro de una ventana Conectado? (mira la de hoy y la de ayer) */
+/** Are we inside an Online window? (checks today's and yesterday's) */
 function inWindowAt(now: Date, c: Config): boolean {
   const dur = windowDurationMs(c);
-  if (dur === 0) return false; // from == until → sin ventana
+  if (dur === 0) return false; // from == until → no window
   for (const offset of [0, 1]) {
     const day = startOfDay(new Date(now.getTime() - offset * DAY_MS));
     if (!c.days.includes(DAYS[day.getDay()])) continue;
@@ -233,7 +233,7 @@ function inWindowAt(now: Date, c: Config): boolean {
   return false;
 }
 
-/** Próximo cambio de estado programado */
+/** Next scheduled state change */
 function nextTransition(now: Date, c: Config): { at: number; to: Persona } | null {
   const dur = windowDurationMs(c);
   if (dur === 0) return null;
@@ -253,7 +253,7 @@ function hmLocal(tsMs: number): string {
   return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
 }
 
-// ---------------------------------------------------------------- estado
+// ---------------------------------------------------------------- state
 
 let user: SteamUser | null = null;
 let steamConnected = false;
@@ -334,7 +334,7 @@ function pushState() {
   emit('state', buildState());
 }
 
-// ---------------------------------------------------------------- cliente de Steam
+// ---------------------------------------------------------------- Steam client
 
 function newClient(): SteamUser {
   const u = new SteamUser({ autoRelogin: true, renewRefreshTokens: true, dataDirectory: steamDataDir });
@@ -401,7 +401,7 @@ function newClient(): SteamUser {
   return u;
 }
 
-/** Arranca/reintenta la conexión con el token guardado (o pide login) */
+/** Starts/retries the connection with the saved token (or requests login) */
 function start() {
   if (steamConnected) {
     log('Ya hay una sesión conectada');
@@ -418,7 +418,7 @@ function start() {
     try {
       user.logOff();
     } catch {
-      /* ignorar */
+      /* ignore */
     }
   }
   loggingIn = true;
@@ -435,7 +435,7 @@ function doLogin(params: Record<string, unknown>) {
 
   if (code) {
     if (submitSsCode(code)) return;
-    // Compatibilidad: código pedido por el flujo clásico de steam-user
+    // Compatibility: code requested by the classic steam-user flow
     if (guard) {
       const cb = guard.callback;
       guard = null;
@@ -461,7 +461,7 @@ function doLogout() {
   try {
     user?.logOff();
   } catch {
-    /* ignorar */
+    /* ignore */
   }
   user = null;
   steamConnected = false;
@@ -478,14 +478,14 @@ function doLogout() {
   emit('authRequired', { kind: 'login', reason: 'Sesión cerrada' });
 }
 
-// ---------------------------------------------------------------- login con steam-session (QR y credenciales)
+// ---------------------------------------------------------------- login with steam-session (QR and credentials)
 
 function cancelLoginSessions() {
   if (qrSession) {
     try {
       qrSession.cancelLoginAttempt();
     } catch {
-      /* ignorar */
+      /* ignore */
     }
     qrSession = null;
   }
@@ -493,7 +493,7 @@ function cancelLoginSessions() {
     try {
       credsSession.cancelLoginAttempt();
     } catch {
-      /* ignorar */
+      /* ignore */
     }
     credsSession = null;
   }
@@ -550,7 +550,7 @@ function finishLogin(session: LoginSession, method: 'qr' | 'creds') {
     try {
       user.logOff();
     } catch {
-      /* ignorar */
+      /* ignore */
     }
     user = null;
   }
@@ -625,7 +625,7 @@ async function startCredsLogin(accountName: string, password: string) {
 
   try {
     const res = await session.startWithCredentials({ accountName, password });
-    if (credsSession !== session) return; // cancelado mientras tanto
+    if (credsSession !== session) return; // cancelled in the meantime
 
     if (!res.actionRequired) {
       log('Credenciales aceptadas; esperando confirmación de Steam…');
@@ -690,7 +690,7 @@ function submitSsCode(code: string): boolean {
   return true;
 }
 
-// ---------------------------------------------------------------- comandos IPC
+// ---------------------------------------------------------------- IPC commands
 
 function handleCommand(msg: { id?: unknown; method?: string; params?: Record<string, unknown> }) {
   const id = msg?.id;
@@ -803,7 +803,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
   }
 }
 
-// ---------------------------------------------------------------- arranque
+// ---------------------------------------------------------------- startup
 
 loadConfig();
 loadAuth();
@@ -839,7 +839,7 @@ function shutdown(reason: string) {
   try {
     user?.logOff();
   } catch {
-    /* ignorar */
+    /* ignore */
   }
   setTimeout(() => process.exit(0), 150);
 }

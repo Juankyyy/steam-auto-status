@@ -19,7 +19,7 @@ export default function App() {
 
     void (async () => {
       try {
-        // 1º registramos el listener: aunque algo falle después, el panel seguirá recibiendo estado
+        // First, register the listener: even if something fails later, the panel keeps receiving state
         if (isTauri) {
           unlisten = await onSidecarMessage((msg) => {
             if (disposed) return
@@ -43,7 +43,7 @@ export default function App() {
           })
         }
 
-        // Estado cacheado inicial (puede llegar null justo al arrancar; los eventos lo rellenan)
+        // Initial cached state (it may arrive null right at startup; events fill it in)
         const initial = await getCachedState()
         if (!disposed && initial) setState(initial)
 
@@ -52,11 +52,11 @@ export default function App() {
           try {
             if (!(await isHiddenLaunch())) await showMainWindow()
           } catch (e) {
-            console.error('No se pudo mostrar la ventana:', e)
+            console.error('Failed to show window:', e)
           }
         }
       } catch (e) {
-        console.error('Fallo al inicializar el panel:', e)
+        console.error('Failed to initialize panel:', e)
       }
     })()
 

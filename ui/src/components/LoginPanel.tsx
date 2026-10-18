@@ -24,7 +24,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
 
   const busy = phase === 'connecting'
 
-  // Arranca el QR automáticamente la primera vez (si no hay nada en marcha)
+  // Starts the QR automatically the first time (if nothing is in progress)
   useEffect(() => {
     if (tab !== 'qr' || autoStarted.current) return
     if (phase === 'idle') {
@@ -33,7 +33,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
     }
   }, [tab, phase])
 
-  // Si el flujo pide un código de Steam Guard, pasamos a credenciales
+  // If the flow asks for a Steam Guard code, we switch to credentials
   useEffect(() => {
     if (guard) setTab('creds')
   }, [guard])

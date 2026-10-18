@@ -1,9 +1,9 @@
-# Release: compila el instalador NSIS en Windows y lo adjunta a la release del tag.
+# Release: builds the NSIS installer on Windows and attaches it to the tag's release.
 #
-# - Push de un tag `vX.Y.Z`: fija la versión desde el tag, compila y publica la
-#   release con el instalador adjunto (nombre: steam-auto-status_X.Y.Z_x64-setup.exe).
-# - workflow_dispatch: solo compila y deja el instalador como artifact, para probar
-#   el pipeline sin publicar nada.
+# - Pushing a `vX.Y.Z` tag: sets the version from the tag, builds and publishes the
+#   release with the installer attached (name: steam-auto-status_X.Y.Z_x64-setup.exe).
+# - workflow_dispatch: only builds and leaves the installer as an artifact, to test
+#   the pipeline without publishing anything.
 name: Release
 
 on:
@@ -31,39 +31,39 @@ jobs:
           node-version: 24
           cache: npm
 
-      - name: Caché de cargo (build de Rust)
+      - name: Cargo cache (Rust build)
         uses: Swatinem/rust-cache@v2
         with:
           workspaces: src-tauri
 
-      - name: Caché del runtime de Node empaquetado
+      - name: Bundled Node runtime cache
         uses: actions/cache@v4
         with:
           path: src-tauri/runtime
           key: node-runtime-v24.12.0-win-x64
 
-      - name: Instalar dependencias
+      - name: Install dependencies
         run: npm ci
 
-      - name: Fijar versión desde el tag
+      - name: Set version from tag
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         run: |
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           node scripts/set-version.mjs $version
 
-      - name: Compilar (sidecar + runtime + app + instalador)
+      - name: Build (sidecar + runtime + app + installer)
         run: npm run build
 
-      - name: Localizar instalador
+      - name: Locate installer
         shell: pwsh
         run: |
           $version = (Get-Content src-tauri/tauri.conf.json -Raw | ConvertFrom-Json).version
           $asset = "src-tauri/target/release/bundle/nsis/steam-auto-status_${version}_x64-setup.exe"
-          if (-not (Test-Path $asset)) { throw "No se encontró el instalador: $asset" }
+          if (-not (Test-Path $asset)) { throw "Installer not found: $asset" }
           "ASSET=$asset" >> $env:GITHUB_ENV
 
-      - name: Publicar release
+      - name: Publish release
         if: startsWith(github.ref, 'refs/tags/')
         shell: pwsh
         env:
@@ -72,7 +72,7 @@ jobs:
           $tag = $env:GITHUB_REF_NAME
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            # La release ya existía: solo actualizamos el instalador.
+            # The release already existed: we only update the installer.
             gh release upload $tag $env:ASSET --clobber
           } else {
             $args = @('release', 'create', $tag, $env:ASSET, '--title', "Steam Auto Status $tag")
@@ -82,7 +82,7 @@ jobs:
             gh @args
           }
 
-      - name: Subir instalador como artifact (solo dispatch)
+      - name: Upload installer artifact (dispatch only)
         if: github.event_name == 'workflow_dispatch'
         uses: actions/upload-artifact@v4
         with:
