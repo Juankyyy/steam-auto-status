@@ -254,7 +254,7 @@ steam-auto-status/
 ├─ sidecar/              # núcleo Node + steam-user
 │  ├─ package.json
 │  └─ src/
-├─ assets/               # identidad visual (fuentes y derivados, ver §4.9)
+├─ assets/               # identidad visual y capturas del README (ver §4.9)
 ├─ package.json          # scripts raíz (dev, build)
 ├─ SPEC.md
 └─ README.md
@@ -364,10 +364,15 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
   `src-tauri/icons/tray/` (feature `image-png` de Tauri), así que no son `bundle.resources`.
 - **Derivados versionados**: `assets/icon-source.png` (maestro 1024),
   `assets/logo-lockup.png` y `assets/logo-lockup-dark.png` (lockup horizontal con el nombre,
-  tinta oscura/clara para fondos claros/oscuros) y `assets/social-preview.png` (vista previa
-  del repositorio, 1280×640; se sube a mano en los ajustes de GitHub).
-- **README**: usa el icono (`assets/icon-source.png`) centrado y el nombre como titular, que
-  se ve nítido en cualquier pantalla y en tema claro y oscuro.
+  tinta oscura/clara para fondos claros/oscuros), `assets/social-preview.png` (vista previa
+  del repositorio, 1280×640; se sube a mano en los ajustes de GitHub) y
+  `assets/screenshots/`: `dashboard.png`, `settings-schedule.png` y `settings-app.png`
+  (capturas recortadas a las tarjetas) y `overview.png`, la tira que usa el README —las tres
+  en fila, 360 px de alto y esquinas redondeadas, compuesta con las anteriores (no se
+  mantiene a mano).
+- **README**: abre con el lockup conmutado por tema con `<picture>` y
+  `prefers-color-scheme` (así el nombre se lee en claro y en oscuro), el eslogan y los
+  badges; debajo va la tira de capturas (`overview.png`) a todo el ancho.
 
 ## 5. Limitaciones conocidas
 
