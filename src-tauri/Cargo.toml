@@ -1,6 +1,6 @@
 [package]
 name = "steam-auto-status"
-version = "0.1.0"
+version = "0.2.0"
 description = "Cambia el estado de Steam (Invisible/Conectado) segun un horario"
 authors = ["Juankyyy"]
 edition = "2021"
