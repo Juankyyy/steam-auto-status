@@ -31,6 +31,7 @@ usuario se queda en Invisible como base. Tres piezas:
 | `src-tauri/src/main.rs` | Todo el shell Rust: bandeja, ventana, comandos, supervisión del sidecar y limpieza de rutas. |
 | `src-tauri/tauri.conf.json` | Configuración Tauri: ventana, permisos, `bundle.resources` y versión (fuente de verdad). |
 | `scripts/` | `fetch-node-runtime.mjs` (runtime de Node pineado), `set-version.mjs` (tag → versión), `rename-installer.mjs`. |
+| `assets/` | Identidad visual: SVG maestro del icono (`icon-source.svg`), variantes de bandeja por estado, lockup y social preview. |
 | `sidecar/scripts/postbuild.mjs` | Copia `system.pem` junto al bundle (steam-crypto lo lee relativo a `__dirname`). |
 | `release-notes/` | Notas curadas por versión; convención en su `README.md`. |
 | `.github/workflows/release.yml` | Release por tag `vX.Y.Z`: compila en `windows-latest` y publica el instalador. |

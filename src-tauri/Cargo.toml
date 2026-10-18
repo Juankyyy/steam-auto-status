@@ -9,7 +9,8 @@ edition = "2021"
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon"] }
+# `image-png` adds the PNG decoder used to load the tray icons (state-dependent).
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
 tauri-plugin-single-instance = { version = "2", features = [] }
 tauri-plugin-autostart = "2"
 tauri-plugin-notification = "2"

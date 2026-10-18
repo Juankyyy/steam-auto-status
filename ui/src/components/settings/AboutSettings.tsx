@@ -1,4 +1,5 @@
 import { Bug, Download, ExternalLink } from 'lucide-react'
+import logoUrl from '@/assets/logo.svg'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { openUrl } from '@/lib/tauri'
@@ -10,6 +11,7 @@ export function AboutSettings() {
   return (
     <Card>
       <CardHeader>
+        <img src={logoUrl} alt="" aria-hidden className="size-10" />
         <CardTitle>Acerca de</CardTitle>
         <CardDescription>Steam Auto Status v{__APP_VERSION__}</CardDescription>
       </CardHeader>

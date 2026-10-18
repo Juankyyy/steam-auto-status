@@ -1,6 +1,10 @@
-# 🎮 Steam Auto Status
+<p align="center">
+  <img src="assets/icon-source.png" width="104" alt="Steam Auto Status">
+</p>
 
-**Your Steam status, on your schedule — automatically.**
+<h1 align="center">Steam Auto Status</h1>
+
+<p align="center"><strong>Your Steam status, on your schedule — automatically.</strong></p>
 
 Steam Auto Status is a tiny Windows tray app that shows you as **Online** during the hours
 you choose and **Invisible** the rest of the time. No more remembering to switch your

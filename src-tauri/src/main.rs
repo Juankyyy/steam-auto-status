@@ -17,6 +17,7 @@ use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 use serde_json::{json, Value};
+use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
@@ -41,6 +42,10 @@ struct Shared {
 struct TrayUi {
     pause: CheckMenuItem<tauri::Wry>,
     autostart: CheckMenuItem<tauri::Wry>,
+    /// Last presence shown by the tray icon (`Some(true)` = online). The icon is only
+    /// replaced when it changes: re-setting the same image on every tick is needless
+    /// work and can make the tray icon flicker on Windows.
+    online: Mutex<Option<bool>>,
 }
 
 fn push_log(shared: &Shared, line: String) {
@@ -244,10 +249,38 @@ fn handle_sidecar_line(app: &AppHandle, shared: &Arc<Shared>, line: &str) {
     let _ = app.emit("sidecar-message", value);
 }
 
+/// Tray icon for a presence. The state is carried by the top-right dot of the mark:
+/// green when online, slate when invisible. The PNGs are the small-size variants of the
+/// logo (sources: `assets/icon-tray-online.svg` / `assets/icon-tray-invisible.svg`).
+fn tray_state_icon(online: bool) -> Option<Image<'static>> {
+    let bytes: &'static [u8] = if online {
+        include_bytes!("../icons/tray/online.png")
+    } else {
+        include_bytes!("../icons/tray/invisible.png")
+    };
+    Image::from_bytes(bytes).ok()
+}
+
 fn update_tray(app: &AppHandle, state: &Value) {
     if let Some(tray) = app.tray_by_id("main") {
         if let Some(tooltip) = state.get("tooltip").and_then(|t| t.as_str()) {
             let _ = tray.set_tooltip(Some(tooltip));
+        }
+        // Presence can be absent (no session yet): that reads as "not online".
+        let online = state.get("persona").and_then(|p| p.as_str()) == Some("online");
+        let changed = match app.try_state::<TrayUi>() {
+            Some(ui) => {
+                let mut last = ui.online.lock().unwrap();
+                let changed = *last != Some(online);
+                *last = Some(online);
+                changed
+            }
+            None => true,
+        };
+        if changed {
+            if let Some(icon) = tray_state_icon(online) {
+                let _ = tray.set_icon(Some(icon));
+            }
         }
     }
     if let Some(ui) = app.try_state::<TrayUi>() {
@@ -423,12 +456,18 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
     app.manage(TrayUi {
         pause: pause.clone(),
         autostart: autostart.clone(),
+        online: Mutex::new(Some(false)),
     });
 
-    let icon = app
-        .default_window_icon()
-        .cloned()
-        .ok_or_else(|| tauri::Error::AssetNotFound("icono por defecto no disponible".into()))?;
+    // Start with the "invisible" tray icon: it is the presence until the sidecar reports
+    // otherwise, so the tray never shows a stale state on launch.
+    let icon = match tray_state_icon(false) {
+        Some(icon) => icon,
+        None => app
+            .default_window_icon()
+            .cloned()
+            .ok_or_else(|| tauri::Error::AssetNotFound("icono por defecto no disponible".into()))?,
+    };
 
     let shared_menu = shared.clone();
     TrayIconBuilder::with_id("main")

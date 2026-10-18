@@ -1,5 +1,6 @@
 import { LayoutDashboard, LogIn, Settings } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router'
+import logoUrl from '@/assets/logo.svg'
 import { AccountChip } from '@/components/AccountChip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -63,6 +64,7 @@ export function Layout() {
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border/60 px-6 py-3">
         <div className="flex items-center gap-2">
+          <img src={logoUrl} alt="" aria-hidden className="size-7 shrink-0" />
           <h1 className="text-lg font-semibold tracking-tight">Steam Auto Status</h1>
           <Badge variant="outline" className="font-mono text-muted-foreground">
             v{__APP_VERSION__}

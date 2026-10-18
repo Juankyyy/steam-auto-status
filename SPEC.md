@@ -32,17 +32,21 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
    `Online` y fuera en `Invisible`. Resultado: los amigos lo ven Conectado solo en la
    franja, incluso si el cliente está cerrado.
 4. **Convivencia de sesiones:** Steam permite múltiples sesiones simultáneas (cliente +
-   sesión de la app), siempre que el `logonID` no colisione. `steam-user` usa por defecto
-   `logonID = 0` y el cliente oficial lo deriva de la IP privada, así que en general
-   conviven sin expulsarse. La app **nunca "juega"** nada (`gamesPlayed` no se usa), por lo
-   que no interfiere con juegos ni VAC. Si se detectara expulsión mutua
-   (`EResult.LogonSessionReplaced`), mitigación: fijar un `logonID` distinto y único.
+   sesión de la app), siempre que el `logonID` no colisione. El cliente oficial lo deriva de
+   la IP privada y `steam-user` usa `0` por defecto —valor compartido por todas sus
+   sesiones, así que dos instancias de la app se expulsarían entre sí—, por lo que la app
+   fija un **`logonID` aleatorio único por proceso** en cada logon. La app **nunca "juega"**
+   nada (`gamesPlayed` no se usa), por lo que no interfiere con juegos ni VAC.
+   (Observado en los logs del cliente de Steam: cada logon nuevo de la cuenta hace que el
+   cliente oficial reprocese su lista de amigos; por eso el paquete de logon se mantiene
+   mínimo —sin renovación de token ni sesión web por logon— y se evitan reconexiones
+   innecesarias; ver §4.2.)
 5. **Autenticación:** primer login interactivo en la UI con dos métodos: **código QR**
    (recomendado; `steam-session` + app móvil de Steam, sin escribir nada) o
    **usuario/contraseña** (con confirmación/aprobación desde la app móvil). El login obtiene
-   un **refresh token** de plataforma `SteamClient` (JWT válido ~200 días; `steam-user` lo
-   renueva con `renewRefreshTokens: true`) que se guarda localmente. Los arranques
-   posteriores no piden nada.
+   un **refresh token** de plataforma `SteamClient` (JWT válido ~200 días; la app lo renueva
+   de forma programada, ver §4.2, nunca durante un logon) que se guarda localmente. Los
+   arranques posteriores no piden nada.
 
 ## 3. Decisiones tomadas
 
@@ -58,6 +62,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 | Horario por defecto | L–V 17:30 → 01:00 |
 | Zona horaria | Hora local de la máquina |
 | Estado base del cliente Steam | **Invisible** (el usuario debe dejarlo así) |
+| Identidad visual | Isotipo propio en SVG (`assets/icon-source.svg`); iconos de app con `tauri icon` y **icono de bandeja distinto según el estado** (punto verde Conectado / gris Invisible) |
 
 ## 4. Arquitectura
 
@@ -87,9 +92,16 @@ Lógica pura, independiente de la UI (emite eventos hacia el shell):
 
 1. Recibe la carpeta de datos del shell (`--data-dir`) y carga `config.json`.
 2. **Primer arranque:** pide login (usuario/contraseña/2FA) a través del shell → `logOn()` y
-   guarda `auth.json` con el refresh token. Arranques siguientes:
-   `logOn({ refreshToken, renewRefreshTokens: true })`.
-3. Persistir en disco el token renovado cada vez que se emita el evento `refreshToken`.
+   guarda `auth.json` con el refresh token. Arranques siguientes: `logOn({ refreshToken,
+   machineName, logonID: <aleatorio por proceso> })` con `renewRefreshTokens: false` y
+   `webLogOn()` anulado: el logon se mantiene limpio (sin peticiones de token ni de sesión
+   web) porque cada sesión nueva hace que el cliente oficial de Steam reprocese su lista de
+   amigos (ver §2.4).
+3. **Renovación de token programada:** cada 30 s se comprueba el JWT guardado (edad > 45
+   días o caduca en < 60 días) y, si toca, se renueva con `LoginSession.renewRefreshToken()`
+   —nunca durante un logon y preferiblemente con el cliente de Steam cerrado (se aplaza
+   hasta 7 días si está abierto)—. Si `steam-user` emitiera `refreshToken` (flujo heredado),
+   también se persiste al momento.
 4. Cada **30 s**: calcular estado deseado (`Online` dentro de ventana, `Invisible` fuera).
    Si difiere del aplicado → `setPersona(EPersonaState.Online | .Invisible)`.
 5. Al arrancar (PC encendido a mitad de ventana), suspensión/reanudación o reconexión:
@@ -101,6 +113,13 @@ Lógica pura, independiente de la UI (emite eventos hacia el shell):
 9. **Avatar de la cuenta**: al conectar resuelve la URL del avatar (XML público del perfil
    por HTTPS; fallback: `getPersonas` sobre la propia conexión), la cachea en
    `profile.json` y la publica en el estado (`account.avatarUrl`) para la cabecera.
+10. **Vigilancia de conexión:** watchdog de logon (45 s) y de reconexión automática (180 s):
+    si Steam nunca responde (observado: `steam-user` reintenta en silencio y la UI se queda
+    en «Conectando…» indefinidamente), se rehace la conexión con un `logonID` nuevo y
+    **backoff exponencial** (5 s → 5 min; 10 min si Steam responde `RateLimitExceeded`).
+    Guardas anti re-entrada y cooldown de 15 s evitan logons encadenados (p. ej. pulsar
+    «Reconectar» repetidamente). El log incluye líneas `debug:` filtradas de `steam-user`
+    (logon/reconexión/renovación) para diagnóstico.
 
 **Semántica de la ventana horaria (cruza medianoche):** una ventana se define por
 `(día de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
@@ -126,7 +145,9 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
 
 - **Bandeja**: tooltip dinámico ("Conectado — Invisible a la 01:00") y menú contextual:
   Abrir panel · Conectado 30 min · Invisible ahora · Pausar/Reanudar automatización ·
-  Iniciar con Windows ✓ · Salir.
+  Iniciar con Windows ✓ · Salir. El **icono de la bandeja refleja la presencia**: el punto
+  superior derecho del isotipo es verde con Conectado y gris (slate) con Invisible; solo se
+  reemplaza cuando el estado cambia, para evitar parpadeos.
 - **Ventana**: oculta por defecto (`--hidden`); se abre desde la bandeja; **se destruye al
   cerrar** (no solo se oculta) para liberar los procesos WebView2; se recrea al reabrir.
   Cerrar nunca debe terminar el proceso; "Salir" solo desde la bandeja.
@@ -147,7 +168,9 @@ Ventana ~900×620, tema oscuro por defecto, organizada en **módulos** navegable
 barra de navegación en la cabecera (React Router con `HashRouter`: funciona igual en el
 webview de Tauri y en un futuro despliegue PWA servido como sitio estático). Objetivo a
 medio plazo: que la interfaz sea instalable como **PWA**; el primer paso ha sido separar
-el panel de control del módulo de ajustes. La cabecera muestra a la derecha el chip de la
+el panel de control del módulo de ajustes. La cabecera muestra a la izquierda el isotipo
+(SVG de `ui/src/assets/logo.svg`, fuente `assets/logo-glyph.svg`) junto al nombre de la app,
+y a la derecha el chip de la
 cuenta (avatar cuadrado con esquinas redondeadas estilo icono de iOS + nombre + punto de
 estado), el badge de conexión mientras no haya cuenta, o un botón **Iniciar sesión**
 cuando no existe ninguna sesión guardada. Junto al nombre de la app hay un badge con la
@@ -199,14 +222,15 @@ steam-auto-status/
 ├─ src-tauri/            # shell Rust (bandeja, ventana, IPC, plugins, iconos)
 │  ├─ tauri.conf.json
 │  ├─ Cargo.toml
-│  ├─ icons/
+│  ├─ icons/             # iconos generados (icons/tray/ = iconos de bandeja por estado)
 │  └─ src/main.rs
 ├─ ui/                   # React + TS + Tailwind + shadcn/ui (Vite)
 │  ├─ components.json
-│  └─ src/
+│  └─ src/               # incluye assets/logo.svg (isotipo de la UI)
 ├─ sidecar/              # núcleo Node + steam-user
 │  ├─ package.json
 │  └─ src/
+├─ assets/               # identidad visual (fuentes y derivados, ver §4.9)
 ├─ package.json          # scripts raíz (dev, build)
 ├─ SPEC.md
 └─ README.md
@@ -291,6 +315,30 @@ procesos extra (vite, wrappers de npm, CLI de Tauri) que no existen en la app in
 Electron fue descartado por mantener toda su pila (~150–250 MB) incluso minimizado.
 Disco instalado estimado: ~60–90 MB.
 
+### 4.9 Identidad visual (logo e iconos)
+
+Isotipo propio: un anillo formado por dos arcos (azul `#64C4FD` arriba-izquierda, slate
+`#6C819E` abajo-derecha), la persona en el centro y dos puntos en los huecos del anillo. El
+punto superior derecho es el **indicador de estado**: verde `#4DD4A0` con Conectado, slate
+con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
+
+- **Fuente de verdad**: los SVG de `assets/` — `icon-source.svg` (icono de app, con
+  recuadro redondeado), `icon-tray-online.svg` / `icon-tray-invisible.svg` (variantes de
+  bandeja, sin recuadro y más gruesas, para que el estado se lea a 16 px) y
+  `logo-glyph.svg` (isotipo sin recuadro, para superficies propias de la UI).
+- **Generación**: `npm run tauri -- icon assets/icon-source.svg` rellena `src-tauri/icons/`
+  (también crea `android/` e `ios/`, que no se usan en Windows y se pueden borrar). Los PNG
+  de bandeja (32 px) salen de cada SVG con
+  `npm run tauri -- icon <svg> -o <dir> --png 32`.
+- **Iconos de bandeja incrustados**: `main.rs` los carga con `include_bytes!` desde
+  `src-tauri/icons/tray/` (feature `image-png` de Tauri), así que no son `bundle.resources`.
+- **Derivados versionados**: `assets/icon-source.png` (maestro 1024),
+  `assets/logo-lockup.png` y `assets/logo-lockup-dark.png` (lockup horizontal con el nombre,
+  tinta oscura/clara para fondos claros/oscuros) y `assets/social-preview.png` (vista previa
+  del repositorio, 1280×640; se sube a mano en los ajustes de GitHub).
+- **README**: usa el icono (`assets/icon-source.png`) centrado y el nombre como titular, que
+  se ve nítido en cualquier pantalla y en tema claro y oscuro.
+
 ## 5. Limitaciones conocidas
 
 1. **PC apagado ⇒ sin cambio.** La app solo actúa si el PC está encendido con internet en
@@ -309,6 +357,11 @@ Disco instalado estimado: ~60–90 MB.
    no interactuar con juegos/comunidad. Decisión y responsabilidad del usuario.
 6. Primer login requiere el código 2FA una vez. Si el token caduca (p. ej. PC apagado
    >200 días), la app pedirá login otra vez (lo indicará en la UI y el log).
+7. **El cliente oficial de Steam puede recargar (o dejar vacía) su lista de amigos** cada vez
+   que la cuenta recibe una sesión nueva —comportamiento del propio cliente, verificado en
+   sus logs, ajeno a esta app—. La app mantiene el paquete de logon mínimo y minimiza las
+   (re)conexiones para que ocurra lo menos posible; si la lista quedara vacía, se recupera
+   reabriendo el panel de amigos, alternando el estado o reiniciando el cliente.
 
 ## 7. Cómo verificar que funciona
 

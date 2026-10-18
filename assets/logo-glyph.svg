@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="52 52 496 496" role="img" aria-label="Steam Auto Status">
+  <title>Steam Auto Status</title>
+  <!-- Brand glyph (no tile): mark only, tightly cropped, for dark or light UI surfaces. -->
+  <g fill="none" stroke-width="39" stroke-linecap="round">
+    <path d="M140.49 374.38A176 176 0 0 1 374.38 140.49" stroke="#64C4FD"/>
+    <path d="M459.51 225.62A176 176 0 0 1 225.62 459.51" stroke="#6C819E"/>
+  </g>
+  <circle cx="442.84" cy="157.16" r="46" fill="#4DD4A0"/>
+  <circle cx="157.16" cy="442.84" r="46" fill="#6C819E"/>
+  <g fill="#64C4FD">
+    <circle cx="300" cy="252.9" r="55.3"/>
+    <path d="M280.5 322.8H319.5A74 53 0 0 1 393.5 375.8V384.4A25 8 0 0 1 368.5 392.4H231.5A25 8 0 0 1 206.5 384.4V375.8A74 53 0 0 1 280.5 322.8Z"/>
+  </g>
+</svg>
