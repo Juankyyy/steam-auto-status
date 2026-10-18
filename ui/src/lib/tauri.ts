@@ -11,6 +11,7 @@ export type LoginPhase =
   | 'qr_expired'
 export type ConnectionState = 'connected' | 'connecting' | 'disconnected'
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
+export type Language = 'es' | 'en'
 
 export interface Config {
   days: Day[]
@@ -21,6 +22,7 @@ export interface Config {
   notifications: boolean
   machineName: string
   devMode: boolean
+  language: Language
 }
 
 export interface AppState {
@@ -35,7 +37,6 @@ export interface AppState {
   authPresent: boolean
   account: { steamID: string; name: string | null; avatarUrl: string | null } | null
   nextTransition: { at: number; to: Persona } | null
-  nextTransitionLabel: string
   config: Config
   lastError: { message: string; eresult?: number } | null
   guardNeeded: { domain: string | null; lastCodeWrong: boolean } | null
@@ -97,16 +98,4 @@ export async function copyText(text: string): Promise<void> {
 export async function onSidecarMessage(handler: (msg: SidecarMessage) => void): Promise<() => void> {
   if (!isTauri) return () => {}
   return await listen<SidecarMessage>('sidecar-message', (e) => handler(e.payload))
-}
-
-export function formatDuration(ms: number): string {
-  const s = Math.max(0, Math.floor(ms / 1000))
-  const d = Math.floor(s / 86400)
-  const h = Math.floor((s % 86400) / 3600)
-  const m = Math.floor((s % 3600) / 60)
-  const sec = s % 60
-  if (d > 0) return `${d} d ${h} h`
-  if (h > 0) return `${h} h ${m} min`
-  if (m > 0) return `${m} min ${sec} s`
-  return `${sec} s`
 }

@@ -3,43 +3,56 @@ import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
-import { cmd, formatDuration, type AppState } from '@/lib/tauri'
+import { formatClock, formatClockAt, formatDuration, type Translate } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n-context'
+import { cmd, type AppState } from '@/lib/tauri'
 
-function statusText(state: AppState | null): string {
-  if (!state) return 'Cargando…'
-  if (state.persona === 'online') return 'Conectado'
-  if (state.persona === 'invisible') return 'Invisible'
-  return 'Sin sesión'
+function statusText(state: AppState | null, t: Translate): string {
+  if (!state) return t('common.loading')
+  if (state.persona === 'online') return t('common.online')
+  if (state.persona === 'invisible') return t('common.invisible')
+  return t('status.noSession')
 }
 
-function statusSubtitle(state: AppState | null): string {
+function statusSubtitle(state: AppState | null, t: Translate): string {
   if (!state) return ''
   switch (state.connection) {
     case 'connected':
       return state.account?.name
-        ? `Sesión activa como ${state.account.name}`
-        : 'Sesión activa en Steam'
+        ? t('status.activeAs', { name: state.account.name })
+        : t('status.activeSession')
     case 'connecting':
-      return 'Conectando con Steam…'
+      return t('status.connectingSteam')
     default:
-      return 'Sin conexión con Steam'
+      return t('status.noSteam')
   }
 }
 
 export function StatusPanel({ state }: { state: AppState | null }) {
+  const { t, lang } = useI18n()
   const [now, setNow] = useState(Date.now())
 
   useEffect(() => {
-    const t = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(t)
+    const interval = setInterval(() => setNow(Date.now()), 1000)
+    return () => clearInterval(interval)
   }, [])
 
   const online = state?.persona === 'online'
   const connected = state?.connection === 'connected'
 
   const countdownMs = state?.nextTransition ? state.nextTransition.at - now : null
-  const nextLabel = state?.nextTransitionLabel ?? '—'
-  const nextTo = state?.nextTransition?.to
+  const next = state?.nextTransition ?? null
+  const cfg = state?.config ?? null
+  // The label is composed here (not in the sidecar) so it follows the UI language and
+  // time format, and the "no schedule" case is a real state check, not a string match.
+  const nextLabel = !state
+    ? '—'
+    : next
+      ? t('status.nextAt', {
+          state: t(next.to === 'online' ? 'common.online' : 'common.invisible'),
+          time: formatClockAt(next.at, lang),
+        })
+      : t('common.noSchedule')
 
   return (
     <Card>
@@ -52,52 +65,58 @@ export function StatusPanel({ state }: { state: AppState | null }) {
             }
           />
           <div className="min-w-40">
-            <div className="text-3xl font-semibold tracking-tight">{statusText(state)}</div>
-            <div className="text-sm text-muted-foreground">{statusSubtitle(state)}</div>
+            <div className="text-3xl font-semibold tracking-tight">{statusText(state, t)}</div>
+            <div className="text-sm text-muted-foreground">{statusSubtitle(state, t)}</div>
           </div>
           <div className="ml-auto text-right">
-            <div className="text-xs uppercase tracking-wide text-muted-foreground">Próximo cambio</div>
+            <div className="text-xs uppercase tracking-wide text-muted-foreground">{t('status.nextChange')}</div>
             <div className="text-sm font-medium">{nextLabel}</div>
             {countdownMs !== null && (
               <div className="text-2xl font-semibold tabular-nums text-muted-foreground">
-                {countdownMs > 0 ? `en ${formatDuration(countdownMs)}` : 'ahora'}
+                {countdownMs > 0 ? t('status.inDuration', { duration: formatDuration(countdownMs, t) }) : t('status.now')}
               </div>
             )}
           </div>
         </div>
 
         <div className="flex flex-wrap items-center gap-2">
-          {state?.paused && <Badge variant="secondary">Automatización en pausa</Badge>}
+          {state?.paused && <Badge variant="secondary">{t('status.paused')}</Badge>}
           {!state?.paused && state?.inWindow && (
             <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
-              Dentro de la franja
+              {t('status.inWindow')}
             </Badge>
           )}
           {!state?.paused && state && !state.inWindow && (
             <Badge variant="outline" className="border-zinc-500/40 text-zinc-400">
-              Fuera de la franja
+              {t('status.outOfWindow')}
             </Badge>
           )}
           {state?.forced && (
             <Badge variant="outline" className="border-sky-500/40 text-sky-400">
-              Forzado {state.forced.persona === 'online' ? 'Conectado' : 'Invisible'} hasta las{' '}
-              {new Date(state.forced.until).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+              {t('status.forcedUntil', {
+                state: t(state.forced.persona === 'online' ? 'common.online' : 'common.invisible'),
+                time: formatClockAt(state.forced.until, lang),
+              })}
             </Badge>
           )}
-          {nextTo && nextLabel !== 'Sin programación' && (
+          {next && cfg && (
             <span className="text-xs text-muted-foreground">
-              Horario: {state?.config.days.length ?? 0} días · {state?.config.onlineFrom}–{state?.config.onlineUntil}
+              {t(cfg.days.length === 1 ? 'status.scheduleSummary.one' : 'status.scheduleSummary.many', {
+                count: cfg.days.length,
+                from: formatClock(cfg.onlineFrom, lang),
+                until: formatClock(cfg.onlineUntil, lang),
+              })}
             </span>
           )}
         </div>
 
         {state?.lastError && state.connection !== 'connected' && (
           <Alert variant="destructive">
-            <AlertTitle>Error de conexión con Steam</AlertTitle>
+            <AlertTitle>{t('status.connError')}</AlertTitle>
             <AlertDescription className="flex items-center justify-between gap-4">
               <span>{state.lastError.message}</span>
               <Button size="sm" variant="outline" onClick={() => void cmd('reconnect')}>
-                Reintentar
+                {t('status.retry')}
               </Button>
             </AlertDescription>
           </Alert>

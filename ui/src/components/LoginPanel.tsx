@@ -4,6 +4,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
+import { useI18n } from '@/lib/i18n-context'
 import { cmd, type LoginPhase } from '@/lib/tauri'
 import { cn } from '@/lib/utils'
 
@@ -16,6 +17,7 @@ interface Props {
 }
 
 export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
+  const { t } = useI18n()
   const [tab, setTab] = useState<'qr' | 'creds'>('qr')
   const [accountName, setAccountName] = useState('')
   const [password, setPassword] = useState('')
@@ -66,52 +68,50 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
   const qrStatus = (() => {
     switch (phase) {
       case 'awaiting_approval':
-        return 'Código escaneado ✓ — confirma la solicitud en la app móvil de Steam.'
+        return t('login.qrScanned')
       case 'connecting':
-        return 'Aprobado ✓ — conectando con Steam…'
+        return t('login.qrApproved')
       case 'qr_expired':
-        return 'El código caducó. Genera uno nuevo.'
+        return t('login.qrExpired')
       default:
-        return 'Abre la app de Steam en tu móvil, escanea el código y confirma la solicitud.'
+        return t('login.qrHint')
     }
   })()
 
   return (
     <Card className="border-sky-500/30">
       <CardHeader>
-        <CardTitle>Conectar con Steam</CardTitle>
-        <CardDescription>
-          Elige el método: código QR con la app móvil (recomendado) o tu usuario y contraseña.
-        </CardDescription>
+        <CardTitle>{t('login.title')}</CardTitle>
+        <CardDescription>{t('login.description')}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex gap-1 rounded-lg border border-border/60 p-1">
-          {(['qr', 'creds'] as const).map((t) => (
+          {(['qr', 'creds'] as const).map((value) => (
             <button
-              key={t}
+              key={value}
               type="button"
               className={cn(
                 'flex-1 rounded-md px-3 py-1.5 text-sm transition-colors',
-                tab === t
+                tab === value
                   ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}
-              onClick={() => (t === 'qr' ? goQr() : goCreds())}
+              onClick={() => (value === 'qr' ? goQr() : goCreds())}
             >
-              {t === 'qr' ? 'Código QR' : 'Usuario y contraseña'}
+              {value === 'qr' ? t('login.tabQr') : t('login.tabCreds')}
             </button>
           ))}
         </div>
 
         {reason && (
           <Alert>
-            <AlertTitle>Se necesita iniciar sesión</AlertTitle>
+            <AlertTitle>{t('login.reasonTitle')}</AlertTitle>
             <AlertDescription>{reason}</AlertDescription>
           </Alert>
         )}
         {error && (
           <Alert variant="destructive">
-            <AlertTitle>Error</AlertTitle>
+            <AlertTitle>{t('login.errorTitle')}</AlertTitle>
             <AlertDescription>{error}</AlertDescription>
           </Alert>
         )}
@@ -121,16 +121,16 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
             {qrDataUrl ? (
               <img
                 src={qrDataUrl}
-                alt="Código QR de inicio de sesión de Steam"
+                alt={t('login.qrAlt')}
                 className="size-56 rounded-xl bg-white p-2"
               />
             ) : (
               <div className="flex size-56 items-center justify-center rounded-xl border border-dashed border-border/60 px-4 text-center text-sm text-muted-foreground">
                 {phase === 'qr_expired'
-                  ? 'El código caducó'
+                  ? t('login.qrExpiredBox')
                   : phase === 'connecting'
-                    ? 'Conectando…'
-                    : 'Generando código…'}
+                    ? t('common.connecting')
+                    : t('login.generating')}
               </div>
             )}
             <p className="text-center text-sm text-muted-foreground">{qrStatus}</p>
@@ -144,7 +144,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
                   void cmd('startQrLogin')
                 }}
               >
-                Generar otro código
+                {t('login.generateAnother')}
               </Button>
             </div>
           </div>
@@ -158,18 +158,18 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
           >
             <p className="text-sm text-muted-foreground">
               {guard.domain
-                ? `Steam envió un código a tu correo (termina en ${guard.domain}).`
-                : 'Introduce el código actual que muestra la app móvil de Steam (sección Steam Guard), o aprueba la solicitud si te aparece en el móvil.'}
+                ? t('login.guardEmail', { domain: guard.domain })
+                : t('login.guardMobile')}
             </p>
             {guard.lastCodeWrong && (
               <Alert variant="destructive">
-                <AlertTitle>Código incorrecto</AlertTitle>
-                <AlertDescription>Espera ~30 s a que la app genere un código nuevo e inténtalo otra vez.</AlertDescription>
+                <AlertTitle>{t('login.wrongCodeTitle')}</AlertTitle>
+                <AlertDescription>{t('login.wrongCodeBody')}</AlertDescription>
               </Alert>
             )}
             <div className="flex items-end gap-3">
               <div className="grid flex-1 gap-2">
-                <Label htmlFor="guard-code">Código</Label>
+                <Label htmlFor="guard-code">{t('login.codeLabel')}</Label>
                 <Input
                   id="guard-code"
                   value={code}
@@ -180,22 +180,19 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
                 />
               </div>
               <Button type="submit" disabled={busy || !code.trim()}>
-                {busy ? 'Comprobando…' : 'Enviar'}
+                {busy ? t('login.checking') : t('login.submit')}
               </Button>
             </div>
           </form>
         ) : phase === 'awaiting_approval' ? (
           <div className="grid gap-3">
             <Alert>
-              <AlertTitle>Aprueba el inicio de sesión</AlertTitle>
-              <AlertDescription>
-                Steam te está pidiendo confirmación. Abre la app móvil de Steam y toca «Aceptar» en la solicitud de
-                inicio de sesión; esta ventana se conectará sola.
-              </AlertDescription>
+              <AlertTitle>{t('login.approveTitle')}</AlertTitle>
+              <AlertDescription>{t('login.approveBody')}</AlertDescription>
             </Alert>
             <div>
               <Button variant="outline" size="sm" onClick={() => void cmd('cancelLogin')}>
-                Cancelar
+                {t('common.cancel')}
               </Button>
             </div>
           </div>
@@ -208,7 +205,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
             }}
           >
             <div className="grid gap-2">
-              <Label htmlFor="account">Usuario de Steam</Label>
+              <Label htmlFor="account">{t('login.accountLabel')}</Label>
               <Input
                 id="account"
                 value={accountName}
@@ -218,7 +215,7 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
               />
             </div>
             <div className="grid gap-2">
-              <Label htmlFor="password">Contraseña</Label>
+              <Label htmlFor="password">{t('login.passwordLabel')}</Label>
               <Input
                 id="password"
                 type="password"
@@ -228,11 +225,9 @@ export function LoginPanel({ guard, phase, qrDataUrl, error, reason }: Props) {
                 disabled={busy}
               />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Las credenciales se envían directamente a Steam; la contraseña no se guarda (solo un token de sesión).
-            </p>
+            <p className="text-xs text-muted-foreground">{t('login.credsHint')}</p>
             <Button type="submit" disabled={busy || !accountName.trim() || !password}>
-              {busy ? 'Iniciando sesión…' : 'Iniciar sesión'}
+              {busy ? t('login.submitting') : t('login.signIn')}
             </Button>
           </form>
         )}

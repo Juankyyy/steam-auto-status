@@ -2,41 +2,39 @@ import { Bug, Download, ExternalLink } from 'lucide-react'
 import logoUrl from '@/assets/logo.svg'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from '@/lib/i18n-context'
 import { openUrl } from '@/lib/tauri'
 
 const REPO_URL = 'https://github.com/Juankyyy/steam-auto-status'
 
 /** Settings › About: version and links to the project. */
 export function AboutSettings() {
+  const { t } = useI18n()
+
   return (
     <Card>
       <CardHeader>
         <img src={logoUrl} alt="" aria-hidden className="size-10" />
-        <CardTitle>Acerca de</CardTitle>
+        <CardTitle>{t('settings.about.title')}</CardTitle>
         <CardDescription>Steam Auto Status v{__APP_VERSION__}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
-        <p className="text-xs text-muted-foreground">
-          Cambia tu presencia de Steam según el horario configurado. Nada sale de tu equipo salvo lo necesario para
-          hablar con Steam.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('settings.about.blurb')}</p>
         <div className="flex flex-wrap gap-2">
           <Button variant="outline" size="sm" onClick={() => void openUrl(REPO_URL)}>
             <ExternalLink />
-            Repositorio
+            {t('settings.about.repo')}
           </Button>
           <Button variant="outline" size="sm" onClick={() => void openUrl(`${REPO_URL}/releases/latest`)}>
             <Download />
-            Última versión
+            {t('settings.about.latest')}
           </Button>
           <Button variant="outline" size="sm" onClick={() => void openUrl(`${REPO_URL}/issues`)}>
             <Bug />
-            Reportar un problema
+            {t('settings.about.report')}
           </Button>
         </div>
-        <p className="text-xs text-muted-foreground">
-          Las actualizaciones son manuales: instala la última versión encima y tus datos se conservan.
-        </p>
+        <p className="text-xs text-muted-foreground">{t('settings.about.updates')}</p>
       </CardContent>
     </Card>
   )

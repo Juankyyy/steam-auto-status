@@ -5,55 +5,59 @@ import { AccountChip } from '@/components/AccountChip'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useAppContext } from '@/lib/app-context'
+import { useI18n } from '@/lib/i18n-context'
 import type { AppState } from '@/lib/tauri'
 import { cn } from '@/lib/utils'
 
-/** Navigation targets of the app shell: one entry per module. */
+/** Navigation targets of the app shell: one entry per module (`key` is a translation key). */
 const NAV_ITEMS = [
-  { to: '/', label: 'Panel de control', icon: LayoutDashboard, end: true },
-  { to: '/settings', label: 'Ajustes', icon: Settings, end: false },
-]
+  { to: '/', key: 'nav.dashboard', icon: LayoutDashboard, end: true },
+  { to: '/settings', key: 'nav.settings', icon: Settings, end: false },
+] as const
 
 /** Extra tab, only listed while developer mode is enabled in settings. */
-const DEV_NAV_ITEM = { to: '/dev', label: 'Desarrollador', icon: Terminal, end: false }
+const DEV_NAV_ITEM = { to: '/dev', key: 'nav.dev', icon: Terminal, end: false } as const
 
-function connectionBadge(state: AppState | null) {
-  if (!state) return <Badge variant="outline">Cargando…</Badge>
+/** Steam connection badge shown while there is no account chip to show. */
+function ConnectionBadge({ state }: { state: AppState | null }) {
+  const { t } = useI18n()
+  if (!state) return <Badge variant="outline">{t('common.loading')}</Badge>
   switch (state.connection) {
     case 'connected':
       return (
         <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
-          Conectado a Steam
+          {t('connection.connected')}
         </Badge>
       )
     case 'connecting':
       return (
         <Badge variant="outline" className="border-amber-500/40 text-amber-400">
-          Conectando…
+          {t('common.connecting')}
         </Badge>
       )
     default:
       return (
         <Badge variant="outline" className="border-red-500/40 text-red-400">
-          Sin conexión
+          {t('common.offline')}
         </Badge>
       )
   }
 }
 
 /** Header right side: account chip, connection badge, or a login shortcut when no session exists. */
-function accountArea(state: AppState | null) {
+function AccountArea({ state }: { state: AppState | null }) {
+  const { t } = useI18n()
   if (state?.account) return <AccountChip state={state} />
   // Loading, connecting, or with a saved session: the connection badge tells the story
   if (!state || state.authPresent || state.connection !== 'disconnected' || state.loginPhase !== 'idle') {
-    return connectionBadge(state)
+    return <ConnectionBadge state={state} />
   }
   // No session and nothing in progress: offer the login (the panel lives in the dashboard)
   return (
     <Button asChild size="sm" variant="outline">
       <Link to="/">
         <LogIn className="size-4" />
-        Iniciar sesión
+        {t('nav.signIn')}
       </Link>
     </Button>
   )
@@ -62,6 +66,7 @@ function accountArea(state: AppState | null) {
 /** Application shell: header (brand, module navigation, Steam status) + routed module. */
 export function Layout() {
   const { state } = useAppContext()
+  const { t } = useI18n()
   const navItems = state?.config.devMode ? [...NAV_ITEMS, DEV_NAV_ITEM] : NAV_ITEMS
 
   return (
@@ -75,8 +80,8 @@ export function Layout() {
           </Badge>
         </div>
 
-        <nav aria-label="Módulos" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-          {navItems.map(({ to, label, icon: Icon, end }) => (
+        <nav aria-label={t('nav.label')} className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
+          {navItems.map(({ to, key, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}
@@ -91,12 +96,14 @@ export function Layout() {
               }
             >
               <Icon className="size-4" />
-              {label}
+              {t(key)}
             </NavLink>
           ))}
         </nav>
 
-        <div className="ml-auto">{accountArea(state)}</div>
+        <div className="ml-auto">
+          <AccountArea state={state} />
+        </div>
       </header>
 
       <main className="flex-1 p-6">

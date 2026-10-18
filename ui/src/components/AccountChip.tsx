@@ -1,13 +1,15 @@
 import { useState } from 'react'
 import { Tooltip, TooltipContent, TooltipTrigger } from '@/components/ui/tooltip'
+import type { Translate } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n-context'
 import type { AppState } from '@/lib/tauri'
 import { cn } from '@/lib/utils'
 
-function statusLabel(state: AppState | null): string {
-  if (!state) return 'Cargando…'
-  if (state.connection === 'connecting') return 'Conectando…'
-  if (state.connection !== 'connected') return 'Sin conexión'
-  return state.persona === 'online' ? 'Conectado' : 'Invisible'
+function statusLabel(state: AppState | null, t: Translate): string {
+  if (!state) return t('common.loading')
+  if (state.connection === 'connecting') return t('common.connecting')
+  if (state.connection !== 'connected') return t('common.offline')
+  return state.persona === 'online' ? t('common.online') : t('common.invisible')
 }
 
 function statusDotClass(state: AppState | null): string {
@@ -21,6 +23,7 @@ function statusDotClass(state: AppState | null): string {
  * (iOS icon style) with a live status dot, plus the display name to its right.
  */
 export function AccountChip({ state }: { state: AppState | null }) {
+  const { t } = useI18n()
   const [failedUrl, setFailedUrl] = useState<string | null>(null)
   const account = state?.account
   if (!account) return null
@@ -34,7 +37,7 @@ export function AccountChip({ state }: { state: AppState | null }) {
       <TooltipTrigger asChild>
         <button
           type="button"
-          aria-label={`Cuenta de Steam: ${displayName}`}
+          aria-label={t('account.aria', { name: displayName })}
           className="flex cursor-default items-center gap-2.5 rounded-md outline-none focus-visible:ring-2 focus-visible:ring-ring/50"
         >
           <span className="relative inline-flex">
@@ -64,7 +67,7 @@ export function AccountChip({ state }: { state: AppState | null }) {
         <div className="grid gap-0.5">
           <span className="font-medium">{displayName}</span>
           <span className="font-mono text-xs opacity-80">{account.steamID}</span>
-          <span className="text-xs opacity-80">{statusLabel(state)}</span>
+          <span className="text-xs opacity-80">{statusLabel(state, t)}</span>
         </div>
       </TooltipContent>
     </Tooltip>

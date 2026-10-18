@@ -26,6 +26,8 @@ status before work — or forgetting to go invisible when you go to bed.
   password with mobile approval). The token is stored locally; it never asks again.
 - 🖥️ **Tray-first** — quick actions from the tray menu ("Online for 30 min",
   "Invisible now", pause/resume) plus a full settings panel.
+- 🌍 **English & Spanish** — switchable any time from Settings › Language; the first run
+  follows your Windows language. The tray menu, tooltip and notifications follow along.
 - 🪶 **Lightweight** — built to stay open 24/7 with minimal resource usage.
 
 ## 🚀 Getting started
@@ -105,8 +107,9 @@ Enable **Start with Windows** so it's always there.
 Steam's normal login/presence API (via the well-known `steam-user` library). VAC has
 nothing to look at.
 
-**Is the interface available in English?** — Not yet: the app UI is currently in Spanish
-(the installer is available in English and Spanish).
+**What languages are available?** — The interface ships in English and Spanish; switch it
+any time in **Settings › Language** (it applies instantly to the panel, the tray menu, the
+tooltip and notifications). On first run the app follows your Windows language.
 
 ## ✅ Requirements
 

@@ -76,13 +76,17 @@ Ejecuta lo que aplique a lo tocado; no lo omitas:
 
 ## Convenciones
 
-- **Idioma**: código, comentarios, mensajes de commit y notas de release en **inglés**;
-  textos visibles de la UI en **español**; SPEC.md y AGENTS.md en español.
+- **Idioma**: código, comentarios, mensajes de commit, notas de release y **logs/diagnóstico**
+  en **inglés**; la UI está **localizada (es/en)** con el diccionario de
+  `ui/src/lib/i18n.ts` (`es` define los tipos: toda clave nueva necesita su `en`, o falla el
+  build); el idioma activo vive en `config.json` (`language`) y lo siguen interfaz, bandeja,
+  tooltip y notificaciones; SPEC.md y AGENTS.md en español.
 - **Commits**: convencionales, en inglés, con scope (`feat(ui): …`, `fix(sidecar): …`,
   `docs(spec): …`, `chore`, `ci`, `refactor`).
 - **UI**: Tailwind v4 con los tokens de `ui/src/index.css` (no colores sueltos), shadcn/ui +
   lucide, alias `@/`. La versión de la app se inyecta en build (`__APP_VERSION__` desde
-  `tauri.conf.json`).
+  `tauri.conf.json`). Textos visibles siempre con `useI18n()`/`t()` (nunca strings sueltos
+  en componentes) y horas/duraciones con los helpers de `lib/i18n.ts`.
 - **Sidecar**: bundle único con esbuild; evita `require()` dinámicos nuevos. `stdout` es el
   canal IPC (JSON por línea): para trazas usa `log()`, **nunca `console.log`** (rompería el
   protocolo). Al tocar el contrato IPC, mantén en sincronía `ui/src/lib/tauri.ts` y el

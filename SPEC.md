@@ -61,6 +61,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 | Arranque con Windows | Login item con `--hidden` (arranca solo en bandeja) |
 | Horario por defecto | L–V 17:30 → 01:00 |
 | Zona horaria | Hora local de la máquina |
+| Idioma de la UI | **Español/English** (`language` en `config.json`); primer arranque: idioma de Windows (es → Español, resto → English). Bandeja, tooltip y notificaciones siguen el mismo ajuste |
 | Estado base del cliente Steam | **Invisible** (el usuario debe dejarlo así) |
 | Identidad visual | Isotipo propio en SVG (`assets/icon-source.svg`); iconos de app con `tauri icon` y **icono de bandeja distinto según el estado** (punto verde Conectado / gris Invisible) |
 
@@ -120,6 +121,11 @@ Lógica pura, independiente de la UI (emite eventos hacia el shell):
     Guardas anti re-entrada y cooldown de 15 s evitan logons encadenados (p. ej. pulsar
     «Reconectar» repetidamente). El log incluye líneas `debug:` filtradas de `steam-user`
     (logon/reconexión/renovación) para diagnóstico.
+11. **Idioma:** los pocos textos que produce el sidecar (tooltip de bandeja, notificaciones
+    y los `lastError`/`reason` que la UI muestra tal cual) siguen `config.language`
+    (diccionario propio es/en); el resto del estado va sin texto pre-renderizado y la UI
+    compone sus etiquetas. El log (`status.log`) es **siempre en inglés**: es diagnóstico
+    técnico, no interfaz.
 
 **Semántica de la ventana horaria (cruza medianoche):** una ventana se define por
 `(día de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
@@ -143,11 +149,13 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
 
 ### 4.3 Shell Tauri (Rust) — `src-tauri/`
 
-- **Bandeja**: tooltip dinámico ("Conectado — Invisible a la 01:00") y menú contextual:
-  Abrir panel · Conectado 30 min · Invisible ahora · Pausar/Reanudar automatización ·
-  Iniciar con Windows ✓ · Salir. El **icono de la bandeja refleja la presencia**: el punto
-  superior derecho del isotipo es verde con Conectado y gris (slate) con Invisible; solo se
-  reemplaza cuando el estado cambia, para evitar parpadeos.
+- **Bandeja**: tooltip dinámico ("Conectado — Invisible a la 01:00", en el idioma
+  configurado) y menú contextual: Abrir panel · Conectado 30 min · Invisible ahora ·
+  Pausar/Reanudar automatización · Iniciar con Windows ✓ · Salir. Las etiquetas del menú
+  viven en el shell (`TrayLabels`, es/en) y se **reconstruye el menú** cuando cambia
+  `config.language`, conservando los checkmarks. El **icono de la bandeja refleja la
+  presencia**: el punto superior derecho del isotipo es verde con Conectado y gris (slate)
+  con Invisible; solo se reemplaza cuando el estado cambia, para evitar parpadeos.
 - **Ventana**: oculta por defecto (`--hidden`); se abre desde la bandeja; **se destruye al
   cerrar** (no solo se oculta) para liberar los procesos WebView2; se recrea al reabrir.
   Cerrar nunca debe terminar el proceso; "Salir" solo desde la bandeja.
@@ -202,6 +210,8 @@ tarjetas:
 - **Cuenta de Steam**: cuenta conectada (nombre + SteamID), botón Reconectar, nombre de
   máquina (`machineName`) y cerrar sesión (borra el token).
 - **Aplicación**: iniciar con Windows, notificaciones y modo desarrollador.
+- **Idioma**: conmutador Español | English (los nombres, cada uno en su idioma); el cambio
+  se aplica al momento en interfaz, bandeja y notificaciones.
 - **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, vaciar
   `status.log` y copiar un diagnóstico (versión, estado y últimas líneas del registro)
   para reportar problemas.
@@ -209,6 +219,16 @@ tarjetas:
 
 Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
 conserva el resumen del horario y la pausa rápida.
+
+**Idioma (es/en):** los textos de la interfaz viven en un diccionario tipado
+(`ui/src/lib/i18n.ts`): `es` es la fuente de los tipos y `en` debe completar exactamente las
+mismas claves — si falta una traducción, falla el build. El contexto (`i18n-context.ts`)
+expone el hook `useI18n()` con `t(clave, params)` (plantillas `{param}`) y el idioma activo
+sale de `config.json › language`, así que la interfaz, la bandeja y las notificaciones
+siguen un único ajuste. Formato con `Intl` por idioma (24 h en español, 12 h AM/PM en
+inglés; duraciones «7 h 30 min» / «7h 30m»); los campos `type="time"` siguen el formato de
+Windows. El `<html lang>` se actualiza en vivo. Los logs del sidecar/shell y el diagnóstico
+técnico van siempre en inglés.
 
 **Desarrollador** (`/dev`): herramientas internas que no deben aparecer para el usuario
 final (forzar Conectado/Invisible y visor del registro en vivo). La pestaña solo aparece
@@ -272,12 +292,17 @@ Ejemplo de `config.json`:
   "startWithWindows": false,
   "notifications": false,
   "machineName": "AutoStatus",
-  "devMode": false
+  "devMode": false,
+  "language": "es"
 }
 ```
 
 `machineName` es el nombre que reporta la sesión a Steam (visible para el propio usuario en
 sus dispositivos, no para los amigos).
+
+`language` (`"es"` | `"en"`) fija el idioma de la interfaz, la bandeja, el tooltip y las
+notificaciones. Si falta (configs antiguas o primer arranque), se detecta del idioma de
+Windows (es → Español, resto → English) y se persiste en el primer guardado.
 
 ### 4.7 Empaquetado
 
@@ -388,6 +413,8 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
    bandeja y aplica el estado correcto.
 6. Generar el instalador (`tauri build`), instalarlo y verificar que los datos de
    `Documents\steam-auto-status\` se conservan y todo sigue funcionando.
+7. Cambiar el idioma en Ajustes › Idioma y comprobar que interfaz, bandeja (menú y tooltip)
+   y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
 
 ## 8. Entorno
 

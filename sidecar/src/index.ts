@@ -23,6 +23,8 @@ const DAYS = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 type Day = (typeof DAYS)[number];
 type Persona = 'online' | 'invisible';
 type LoginPhase = 'idle' | 'connecting' | 'awaiting_guard' | 'awaiting_qr' | 'awaiting_approval' | 'qr_expired';
+/** UI language: drives the few user-facing strings this process produces (see UI_STRINGS). */
+type Language = 'es' | 'en';
 
 interface Config {
   days: Day[];
@@ -33,11 +35,25 @@ interface Config {
   notifications: boolean;
   machineName: string;
   devMode: boolean;
+  language: Language;
 }
 
 interface AuthFile {
   refreshToken: string;
   steamID?: string;
+}
+
+/**
+ * First-run language: follow the Windows locale (Node's ICU reflects the user's system
+ * locale). Spanish → `es`, anything else → `en`. The resolved value is persisted to
+ * config.json on the first load, so later manual changes in Settings stick.
+ */
+function detectLanguage(): Language {
+  try {
+    return Intl.DateTimeFormat().resolvedOptions().locale.toLowerCase().startsWith('es') ? 'es' : 'en';
+  } catch {
+    return 'es';
+  }
 }
 
 const DEFAULT_CONFIG: Config = {
@@ -49,6 +65,7 @@ const DEFAULT_CONFIG: Config = {
   notifications: false,
   machineName: 'AutoStatus',
   devMode: false,
+  language: detectLanguage(),
 };
 
 // ---------------------------------------------------------------- arguments and paths
@@ -134,6 +151,7 @@ function sanitizeConfig(raw: Record<string, unknown>): Config {
   const machineName = typeof raw.machineName === 'string' && raw.machineName.trim()
     ? raw.machineName.trim().slice(0, 32)
     : DEFAULT_CONFIG.machineName;
+  const language = typeof raw.language === 'string' ? raw.language.trim().toLowerCase() : '';
   return {
     days,
     onlineFrom: normTime(raw.onlineFrom) ?? DEFAULT_CONFIG.onlineFrom,
@@ -143,6 +161,7 @@ function sanitizeConfig(raw: Record<string, unknown>): Config {
     notifications: !!raw.notifications,
     machineName,
     devMode: !!raw.devMode,
+    language: language === 'es' || language === 'en' ? language : DEFAULT_CONFIG.language,
   };
 }
 
@@ -160,9 +179,13 @@ function loadConfig() {
     }
   }
   try {
-    cfg = sanitizeConfig({ ...DEFAULT_CONFIG, ...JSON.parse(fs.readFileSync(configPath, 'utf8')) });
+    const parsed = JSON.parse(fs.readFileSync(configPath, 'utf8')) as Record<string, unknown>;
+    cfg = sanitizeConfig({ ...DEFAULT_CONFIG, ...parsed });
+    // Persist the detected language on the first load (or after an invalid value) so the
+    // first-run choice is stable and visible in config.json.
+    if (parsed.language !== cfg.language) saveConfig();
   } catch (e) {
-    log(`config.json inválido, usando valores por defecto (${e})`);
+    log(`Invalid config.json, using defaults (${e})`);
     cfg = structuredClone(DEFAULT_CONFIG);
   }
 }
@@ -171,8 +194,60 @@ function saveConfig() {
   try {
     fs.writeFileSync(configPath, JSON.stringify(cfg, null, 2));
   } catch (e) {
-    log(`No se pudo guardar config.json: ${e}`);
+    log(`Could not save config.json: ${e}`);
   }
+}
+
+// ---------------------------------------------------------------- UI strings
+
+/**
+ * The few user-facing strings this process produces: tray tooltip, Windows notification
+ * bodies and the messages the panel renders verbatim (`reason`, `lastError`). Log lines
+ * stay in English on purpose: they are technical diagnostics and must read the same in
+ * bug reports regardless of the chosen UI language.
+ */
+const UI_STRINGS = {
+  es: {
+    signIn: 'Inicia sesión',
+    connecting: 'Conectando…',
+    offline: 'Sin conexión',
+    online: 'Conectado',
+    invisible: 'Invisible',
+    noSchedule: 'Sin programación',
+    nextOnlineAt: 'Conectado a las {time}',
+    nextInvisibleAt: 'Invisible a las {time}',
+    nowOnline: 'Ahora apareces como Conectado en Steam',
+    nowInvisible: 'Ahora apareces como Invisible en Steam',
+    signedOut: 'Sesión cerrada',
+    timeout: 'Tiempo de espera agotado al conectar con Steam',
+    loginExpired: 'El intento de inicio de sesión caducó; inténtalo de nuevo',
+    unsupportedGuard: 'Steam pidió un método de verificación no soportado',
+  },
+  en: {
+    signIn: 'Sign in',
+    connecting: 'Connecting…',
+    offline: 'Offline',
+    online: 'Online',
+    invisible: 'Invisible',
+    noSchedule: 'No schedule',
+    nextOnlineAt: 'Online at {time}',
+    nextInvisibleAt: 'Invisible at {time}',
+    nowOnline: 'You now appear as Online on Steam',
+    nowInvisible: 'You now appear as Invisible on Steam',
+    signedOut: 'Signed out',
+    timeout: 'Timed out connecting to Steam',
+    loginExpired: 'The login attempt expired; try again',
+    unsupportedGuard: 'Steam requested an unsupported verification method',
+  },
+} as const;
+
+type UiStringKey = keyof (typeof UI_STRINGS)['es'];
+
+/** Looks up a user-facing string in the configured language (see UI_STRINGS). */
+function ui(key: UiStringKey, params: Record<string, string | number> = {}): string {
+  let s: string = UI_STRINGS[cfg.language][key];
+  for (const [k, v] of Object.entries(params)) s = s.replace(`{${k}}`, String(v));
+  return s;
 }
 
 // ---------------------------------------------------------------- auth
@@ -193,7 +268,7 @@ function saveAuth(a: AuthFile) {
   try {
     fs.writeFileSync(authPath, JSON.stringify(a, null, 2));
   } catch (e) {
-    log(`No se pudo guardar auth.json: ${e}`);
+    log(`Could not save auth.json: ${e}`);
   }
 }
 
@@ -283,10 +358,10 @@ async function renewTokenIfNeeded(): Promise<void> {
     if (!renewalDeferredSince) renewalDeferredSince = now;
     if (now - renewalDeferredSince < RENEWAL_DEFER_MAX_MS) {
       lastRenewalTry = now;
-      log('Renovación de token aplazada: el cliente de Steam está abierto');
+      log('Token renewal deferred: the Steam client is open');
       return;
     }
-    log('Renovación de token aplazada demasiado tiempo; se intenta con Steam abierto');
+    log('Token renewal deferred for too long; attempting with Steam open');
   }
   renewalRunning = true;
   lastRenewalTry = now;
@@ -300,19 +375,19 @@ async function renewTokenIfNeeded(): Promise<void> {
     session.refreshToken = current;
     const renewed = await withTimeout(session.renewRefreshToken(), 30_000);
     if (!auth || auth.refreshToken !== current) {
-      log('Renovación completada tras un cierre de sesión; se descarta');
+      log('Renewal completed after a logout; discarding it');
       return;
     }
     if (renewed) {
       saveAuth({ refreshToken: session.refreshToken, steamID: auth.steamID });
       renewalDeferredSince = null;
-      log('Token de sesión renovado (programado)');
+      log('Session token renewed (scheduled)');
     } else {
-      log('Steam no emitió un token nuevo; se reintentará más adelante');
+      log('Steam did not issue a new token; will retry later');
     }
     pushState();
   } catch (e) {
-    log(`No se pudo renovar el token: ${e instanceof Error ? e.message : String(e)}`);
+    log(`Could not renew the token: ${e instanceof Error ? e.message : String(e)}`);
   } finally {
     renewalRunning = false;
   }
@@ -344,7 +419,7 @@ function saveProfile(p: ProfileFile) {
   try {
     fs.writeFileSync(profilePath, JSON.stringify(p, null, 2));
   } catch (e) {
-    log(`No se pudo guardar profile.json: ${e}`);
+    log(`Could not save profile.json: ${e}`);
   }
 }
 
@@ -371,7 +446,7 @@ async function fetchAvatar(steamID: string) {
     saveProfile({ steamID, avatarUrl: url });
     if (avatarSteamID === steamID && url !== avatarUrl) {
       avatarUrl = url;
-      log('Avatar de la cuenta actualizado');
+      log('Account avatar updated');
       pushState();
     }
   } finally {
@@ -454,9 +529,13 @@ function nextTransition(now: Date, c: Config): { at: number; to: Persona } | nul
   return candidates.filter((x) => x.at > now.getTime()).sort((a, b) => a.at - b.at)[0] ?? null;
 }
 
+/** Clock time for the tray tooltip, in the UI language (24h in Spanish, 12h in English). */
 function hmLocal(tsMs: number): string {
-  const d = new Date(tsMs);
-  return `${String(d.getHours()).padStart(2, '0')}:${String(d.getMinutes()).padStart(2, '0')}`;
+  return new Intl.DateTimeFormat(cfg.language === 'es' ? 'es-ES' : 'en-US', {
+    // `numeric` keeps Spanish at "17:30" and reads naturally in English ("5:30 PM").
+    hour: 'numeric',
+    minute: '2-digit',
+  }).format(new Date(tsMs));
 }
 
 // ---------------------------------------------------------------- state
@@ -506,11 +585,11 @@ function applyPersona(forceApply = false) {
   const previous = appliedPersona;
   user.setPersona(wanted === 'online' ? SteamUser.EPersonaState.Online : SteamUser.EPersonaState.Invisible);
   appliedPersona = wanted;
-  log(`Presencia → ${wanted === 'online' ? 'Conectado' : 'Invisible'}`);
+  log(`Presence → ${wanted === 'online' ? 'Online' : 'Invisible'}`);
   if (cfg.notifications && previous && previous !== wanted) {
     emit('notify', {
       title: 'Steam Auto Status',
-      body: wanted === 'online' ? 'Ahora apareces como Conectado en Steam' : 'Ahora apareces como Invisible en Steam',
+      body: ui(wanted === 'online' ? 'nowOnline' : 'nowInvisible'),
     });
   }
   pushState();
@@ -519,14 +598,21 @@ function applyPersona(forceApply = false) {
 function buildState() {
   const now = new Date();
   const nt = nextTransition(now, cfg);
-  const ntLabel = nt ? `${nt.to === 'online' ? 'Conectado' : 'Invisible'} a las ${hmLocal(nt.at)}` : 'Sin programación';
   const persona: Persona | null = appliedPersona ?? (steamConnected ? 'invisible' : null);
   const steamID: string | null = user?.steamID ? user.steamID.toString() : null;
 
+  // The tray tooltip is composed here (the shell only displays it). The panel builds its
+  // own labels from the machine-readable fields (`nextTransition`), so the state carries
+  // no pre-rendered text the UI could drift from.
   let tooltip = 'Steam Auto Status';
-  if (!auth) tooltip += ' — Inicia sesión';
-  else if (!steamConnected) tooltip += loggingIn ? ' — Conectando…' : ' — Sin conexión';
-  else tooltip += ` — ${persona === 'online' ? 'Conectado' : 'Invisible'} (${ntLabel})`;
+  if (!auth) tooltip += ` — ${ui('signIn')}`;
+  else if (!steamConnected) tooltip += ` — ${ui(loggingIn ? 'connecting' : 'offline')}`;
+  else {
+    const ntLabel = nt
+      ? ui(nt.to === 'online' ? 'nextOnlineAt' : 'nextInvisibleAt', { time: hmLocal(nt.at) })
+      : ui('noSchedule');
+    tooltip += ` — ${ui(persona === 'online' ? 'online' : 'invisible')} (${ntLabel})`;
+  }
 
   return {
     connection: steamConnected ? 'connected' : loggingIn ? 'connecting' : 'disconnected',
@@ -542,7 +628,6 @@ function buildState() {
       ? { steamID, name: user?.accountInfo?.name ?? null, avatarUrl: avatarSteamID === steamID ? avatarUrl : null }
       : null,
     nextTransition: nt,
-    nextTransitionLabel: ntLabel,
     config: cfg,
     lastError,
     guardNeeded: guard ? { domain: guard.domain, lastCodeWrong: guard.wrong } : ssGuard,
@@ -587,7 +672,7 @@ function newClient(): SteamUser {
     qrDataUrl = null;
     guard = null;
     lastError = null;
-    log(`Conectado a Steam como ${u.steamID ?? '?'}`);
+    log(`Connected to Steam as ${u.steamID ?? '?'}`);
     applyPersona(true);
     if (u.steamID) applyAvatar(u.steamID.toString());
     pushState();
@@ -595,7 +680,7 @@ function newClient(): SteamUser {
 
   u.on('accountInfo', (name: string) => {
     if (user !== u) return;
-    if (name) log(`Cuenta: ${name}`);
+    if (name) log(`Account: ${name}`);
     pushState();
   });
 
@@ -603,7 +688,7 @@ function newClient(): SteamUser {
     if (user !== u) return;
     const steamID = u.steamID ? u.steamID.toString() : auth?.steamID;
     saveAuth({ refreshToken: token, steamID });
-    log('Token de sesión guardado/actualizado');
+    log('Session token saved/updated');
     pushState();
   });
 
@@ -613,7 +698,7 @@ function newClient(): SteamUser {
     loggingIn = false;
     loginPhase = 'awaiting_guard';
     guard = { domain: domain ?? null, callback, wrong: !!lastCodeWrong };
-    log(domain ? `Steam Guard: se necesita código del email (…${domain})` : 'Steam Guard: se necesita código de la app móvil');
+    log(domain ? `Steam Guard: email code required (…${domain})` : 'Steam Guard: mobile app code required');
     pushState();
     emit('authRequired', { kind: 'guard', domain: domain ?? null, lastCodeWrong: !!lastCodeWrong });
   });
@@ -626,7 +711,7 @@ function newClient(): SteamUser {
     guard = null;
     loginPhase = 'idle';
     lastError = { message: e.message ?? String(e), eresult: e.eresult };
-    log(`Error de Steam: ${lastError.message}${e.eresult !== undefined ? ` [${eresultName(e.eresult)}]` : ''}`);
+    log(`Steam error: ${lastError.message}${e.eresult !== undefined ? ` [${eresultName(e.eresult)}]` : ''}`);
     pushState();
     const needLogin = [
       SteamUser.EResult.InvalidPassword,
@@ -649,11 +734,11 @@ function newClient(): SteamUser {
   u.on('disconnected', (eresult: number, msg?: string) => {
     if (user !== u) return;
     steamConnected = false;
-    log(`Desconectado de Steam (${eresultName(eresult)}${msg ? `: ${msg}` : ''})`);
+    log(`Disconnected from Steam (${eresultName(eresult)}${msg ? `: ${msg}` : ''})`);
     pushState();
     // steam-user's autoRelogin retries by itself; the watchdog is only a backstop for the
-    // case where that recovery gets stuck (observed in the wild as a silent "Conectando…").
-    if (!loggingIn) armWatchdog(u, 'reconexión automática', RECONNECT_WATCHDOG_MS);
+    // case where that recovery gets stuck (observed in the wild as a silent "Connecting…").
+    if (!loggingIn) armWatchdog(u, 'automatic relogin', RECONNECT_WATCHDOG_MS);
   });
 
   return u;
@@ -670,7 +755,7 @@ function clearLogonWatchdog() {
 /**
  * Watches a client that should come up but may never report back (Steam sometimes never
  * answers the logon message; steam-user then retries silently and the app shows
- * "Conectando…" forever). If `u` is still the current client and never connects within
+ * "Connecting…" forever). If `u` is still the current client and never connects within
  * `ms`, it is torn down and a fresh attempt is scheduled.
  */
 function armWatchdog(u: SteamUser, why: string, ms: number) {
@@ -678,10 +763,10 @@ function armWatchdog(u: SteamUser, why: string, ms: number) {
   logonWatchdog = setTimeout(() => {
     logonWatchdog = null;
     if (user !== u || steamConnected) return;
-    log(`Steam no respondió (${why}); reinicio la conexión`);
+    log(`Steam did not respond (${why}); restarting the connection`);
     loggingIn = false;
     loginPhase = 'idle';
-    lastError = { message: 'Tiempo de espera agotado al conectar con Steam' };
+    lastError = { message: ui('timeout') };
     try {
       u.logOff();
     } catch {
@@ -698,7 +783,7 @@ function armWatchdog(u: SteamUser, why: string, ms: number) {
 function scheduleRetry(overrideMs?: number) {
   if (retryTimer || steamConnected) return;
   const delay = overrideMs ?? Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.min(failedLogonAttempts, 6));
-  log(`Reintento de conexión en ${Math.round(delay / 1000)} s`);
+  log(`Reconnect attempt in ${Math.round(delay / 1000)} s`);
   retryTimer = setTimeout(() => {
     retryTimer = null;
     start(true);
@@ -718,12 +803,12 @@ function randomLogonID(): number {
 /** Starts/retries the connection with the saved token (or requests login). */
 function start(force = false) {
   if (steamConnected) {
-    log('Ya hay una sesión conectada');
+    log('A session is already connected');
     pushState();
     return;
   }
   if (!force && (loggingIn || Date.now() - lastStartAt < START_DEBOUNCE_MS)) {
-    log('Se ignora el intento: ya hay un inicio de sesión en curso o el último fue hace un momento');
+    log('Ignoring the attempt: a login is already in progress or the last one was a moment ago');
     pushState();
     return;
   }
@@ -749,9 +834,9 @@ function start(force = false) {
   loginPhase = 'connecting';
   lastError = null;
   user = newClient();
-  log('Iniciando sesión con token guardado…');
+  log('Logging in with the saved token…');
   user.logOn({ refreshToken: auth.refreshToken, machineName: cfg.machineName, logonID: randomLogonID() });
-  armWatchdog(user, 'inicio de sesión', LOGON_WATCHDOG_MS);
+  armWatchdog(user, 'logon', LOGON_WATCHDOG_MS);
   pushState();
 }
 
@@ -766,19 +851,19 @@ function doLogin(params: Record<string, unknown>) {
       guard = null;
       loggingIn = true;
       loginPhase = 'connecting';
-      log('Código de Steam Guard enviado');
+      log('Steam Guard code submitted');
       pushState();
       cb(code);
       return;
     }
-    throw new Error('No hay una solicitud de código activa');
+    throw new Error('No active code request');
   }
 
   const accountName = String(params.accountName ?? '').trim();
   const password = String(params.password ?? '');
-  if (!accountName || !password) throw new Error('Usuario y contraseña requeridos');
+  if (!accountName || !password) throw new Error('Account name and password required');
 
-  log(`Iniciando sesión como ${accountName}…`);
+  log(`Logging in as ${accountName}…`);
   void startCredsLogin(accountName, password);
 }
 
@@ -804,9 +889,9 @@ function doLogout() {
   loginPhase = 'idle';
   cancelLoginSessions();
   clearAuth();
-  log('Sesión cerrada (token eliminado)');
+  log('Signed out (token removed)');
   pushState();
-  emit('authRequired', { kind: 'login', reason: 'Sesión cerrada' });
+  emit('authRequired', { kind: 'login', reason: ui('signedOut') });
 }
 
 // ---------------------------------------------------------------- login with steam-session (QR and credentials)
@@ -844,14 +929,14 @@ function makeLoginSession(): LoginSession {
     loginPhase = 'awaiting_approval';
     log(
       session === qrSession
-        ? 'QR escaneado; esperando aprobación en la app móvil'
-        : 'Confirmación abierta en la app móvil; esperando aprobación',
+        ? 'QR scanned; waiting for approval in the mobile app'
+        : 'Confirmation opened in the mobile app; waiting for approval',
     );
     pushState();
   });
 
   session.on('steamGuardMachineToken', () => {
-    log('Steam Guard: token de máquina recibido');
+    log('Steam Guard: machine token received');
   });
 
   session.on('authenticated', () => {
@@ -875,7 +960,7 @@ function finishLogin(session: LoginSession, method: 'qr' | 'creds') {
     steamID: session.steamID ? String(session.steamID) : undefined,
   });
   log(
-    `${method === 'qr' ? 'QR aprobado' : 'Sesión iniciada con credenciales'} (${session.accountName ?? 'cuenta'}); token guardado`,
+    `${method === 'qr' ? 'QR approved' : 'Logged in with credentials'} (${session.accountName ?? 'account'}); token saved`,
   );
   if (user) {
     try {
@@ -897,7 +982,7 @@ function onLoginSessionError(session: LoginSession, e: Error & { eresult?: numbe
   loggingIn = false;
   loginPhase = 'idle';
   lastError = { message: e.message ?? String(e), eresult: e.eresult };
-  log(`Error en el inicio de sesión: ${lastError.message}`);
+  log(`Login error: ${lastError.message}`);
   pushState();
 }
 
@@ -910,15 +995,15 @@ function onLoginSessionTimeout(session: LoginSession) {
   ssGuard = null;
   loggingIn = false;
   loginPhase = wasQr ? 'qr_expired' : 'idle';
-  if (!wasQr) lastError = { message: 'El intento de inicio de sesión caducó; inténtalo de nuevo' };
-  log(wasQr ? 'El código QR caducó sin completarse' : 'El intento de inicio de sesión caducó');
+  if (!wasQr) lastError = { message: ui('loginExpired') };
+  log(wasQr ? 'The QR code expired before completion' : 'The login attempt expired');
   pushState();
 }
 
 function startQrLogin() {
   cancelLoginSessions();
   if (user && steamConnected) {
-    log('Ya hay una sesión conectada');
+    log('A session is already connected');
     return;
   }
 
@@ -933,11 +1018,11 @@ function startQrLogin() {
     .then(async (res) => {
       if (qrSession !== session) return;
       if (!res.qrChallengeUrl) {
-        onLoginSessionError(session, new Error('Steam no devolvió la URL del código QR'));
+        onLoginSessionError(session, new Error('Steam did not return the QR code URL'));
         return;
       }
       qrDataUrl = await QRCode.toDataURL(res.qrChallengeUrl, { width: 288, margin: 2 });
-      log('Código QR listo: escanéalo con la app móvil de Steam');
+      log('QR code ready: scan it with the Steam mobile app');
       pushState();
     })
     .catch((e: Error & { eresult?: number }) => onLoginSessionError(session, e));
@@ -946,7 +1031,7 @@ function startQrLogin() {
 async function startCredsLogin(accountName: string, password: string) {
   cancelLoginSessions();
   if (user && steamConnected) {
-    log('Ya hay una sesión conectada');
+    log('A session is already connected');
     return;
   }
 
@@ -963,7 +1048,7 @@ async function startCredsLogin(accountName: string, password: string) {
     if (credsSession !== session) return; // cancelled in the meantime
 
     if (!res.actionRequired) {
-      log('Credenciales aceptadas; esperando confirmación de Steam…');
+      log('Credentials accepted; waiting for Steam confirmation…');
       pushState();
       return;
     }
@@ -983,16 +1068,16 @@ async function startCredsLogin(accountName: string, password: string) {
       loginPhase = 'awaiting_guard';
       log(
         email
-          ? `Steam Guard: se necesita código del email (…${email})`
-          : 'Steam Guard: se necesita código de la app móvil',
+          ? `Steam Guard: email code required (…${email})`
+          : 'Steam Guard: mobile app code required',
       );
     } else if (hasConfirmation) {
       loginPhase = 'awaiting_approval';
-      log('Aprueba el inicio de sesión en tu app móvil de Steam');
+      log('Approve the login in your Steam mobile app');
     } else {
       loginPhase = 'idle';
-      lastError = { message: 'Steam pidió un método de verificación no soportado' };
-      log('Método de verificación no soportado');
+      lastError = { message: ui('unsupportedGuard') };
+      log('Unsupported verification method');
     }
     pushState();
   } catch (e) {
@@ -1011,7 +1096,7 @@ function submitSsCode(code: string): boolean {
     .then(() => {
       if (credsSession !== session) return;
       ssGuard = null;
-      log('Código aceptado; esperando confirmación de Steam…');
+      log('Code accepted; waiting for Steam confirmation…');
       pushState();
     })
     .catch((e: Error & { eresult?: number }) => {
@@ -1020,7 +1105,7 @@ function submitSsCode(code: string): boolean {
       ssGuard = { domain: ssGuard ? ssGuard.domain : null, lastCodeWrong: true };
       loginPhase = 'awaiting_guard';
       lastError = { message: e.message ?? String(e), eresult: e.eresult };
-      log(`Código rechazado: ${lastError.message}`);
+      log(`Code rejected: ${lastError.message}`);
       pushState();
     });
   return true;
@@ -1057,7 +1142,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
         const persona: Persona = params.state === 'online' ? 'online' : 'invisible';
         const minutes = Math.min(720, Math.max(1, Number(params.minutes) || 30));
         force = { persona, until: Date.now() + minutes * 60_000 };
-        log(`Forzado temporal: ${persona === 'online' ? 'Conectado' : 'Invisible'} durante ${minutes} min`);
+        log(`Temporary override: ${persona === 'online' ? 'Online' : 'Invisible'} for ${minutes} min`);
         applyPersona(true);
         pushState();
         res(id, buildState());
@@ -1066,7 +1151,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
 
       case 'clearForce':
         force = null;
-        log('Forzado temporal cancelado');
+        log('Temporary override cancelled');
         applyPersona();
         pushState();
         res(id, buildState());
@@ -1075,7 +1160,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
       case 'pause':
         cfg.paused = true;
         saveConfig();
-        log('Automatización pausada');
+        log('Automation paused');
         applyPersona();
         emit('configChanged', cfg);
         pushState();
@@ -1085,7 +1170,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
       case 'resume':
         cfg.paused = false;
         saveConfig();
-        log('Automatización reanudada');
+        log('Automation resumed');
         applyPersona();
         emit('configChanged', cfg);
         pushState();
@@ -1120,7 +1205,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
           loggingIn = false;
           lastError = null;
           loginPhase = 'idle';
-          log('Intento de inicio de sesión cancelado');
+          log('Login attempt cancelled');
           pushState();
         }
         res(id, {});
@@ -1138,12 +1223,12 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
           /* ignore */
         }
         emit('logsCleared', {});
-        log('Registro vaciado por el usuario');
+        log('Log cleared by the user');
         res(id, {});
         break;
 
       default:
-        ipcError(id, `Método desconocido: ${msg?.method}`);
+        ipcError(id, `Unknown method: ${msg?.method}`);
     }
   } catch (e) {
     ipcError(id, e instanceof Error ? e.message : String(e));
@@ -1155,12 +1240,12 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
 loadConfig();
 loadAuth();
 loadProfile();
-log(`Sidecar iniciado (datos en ${dataDir})`);
+log(`Sidecar started (data in ${dataDir})`);
 start();
 
 setInterval(() => {
   if (force && Date.now() >= force.until) {
-    log('Forzado temporal finalizado; vuelvo al horario');
+    log('Temporary override finished; back to the schedule');
     force = null;
   }
   applyPersona();
@@ -1175,7 +1260,7 @@ rl.on('line', (line) => {
   try {
     handleCommand(JSON.parse(t));
   } catch {
-    log('IPC: línea inválida ignorada');
+    log('IPC: invalid line ignored');
   }
 });
 
@@ -1183,7 +1268,7 @@ let shuttingDown = false;
 function shutdown(reason: string) {
   if (shuttingDown) return;
   shuttingDown = true;
-  log(`Cerrando (${reason})`);
+  log(`Shutting down (${reason})`);
   clearLogonWatchdog();
   if (retryTimer) clearTimeout(retryTimer);
   cancelLoginSessions();
@@ -1195,6 +1280,6 @@ function shutdown(reason: string) {
   setTimeout(() => process.exit(0), 150);
 }
 
-rl.on('close', () => shutdown('stdin cerrado'));
+rl.on('close', () => shutdown('stdin closed'));
 process.on('SIGINT', () => shutdown('SIGINT'));
 process.on('SIGTERM', () => shutdown('SIGTERM'));

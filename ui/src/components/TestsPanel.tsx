@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState } from 'react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { useI18n } from '@/lib/i18n-context'
 import { cmd, type AppState } from '@/lib/tauri'
 
 export function TestsPanel({ state, logs }: { state: AppState | null; logs: string[] }) {
+  const { t } = useI18n()
   const [minutes, setMinutes] = useState(30)
   const scrollRef = useRef<HTMLDivElement>(null)
 
@@ -17,10 +19,8 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
   return (
     <Card className="flex flex-col">
       <CardHeader>
-        <CardTitle>Pruebas y registro</CardTitle>
-        <CardDescription>
-          Fuerza un estado temporal para comprobar cómo te ven tus amigos; al terminar vuelve solo al horario.
-        </CardDescription>
+        <CardTitle>{t('dev.title')}</CardTitle>
+        <CardDescription>{t('dev.description')}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <div className="flex flex-wrap items-center gap-2">
@@ -30,7 +30,7 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
             disabled={disabled}
             onClick={() => void cmd('forceState', { state: 'online', minutes })}
           >
-            Conectado {minutes} min
+            {t('dev.forceOnline', { minutes })}
           </Button>
           <Button
             size="sm"
@@ -38,7 +38,7 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
             disabled={disabled}
             onClick={() => void cmd('forceState', { state: 'invisible', minutes })}
           >
-            Invisible {minutes} min
+            {t('dev.forceInvisible', { minutes })}
           </Button>
           <select
             className="h-9 rounded-md border border-input bg-transparent px-2 text-sm"
@@ -53,7 +53,7 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
           </select>
           {state?.forced && (
             <Button size="sm" variant="secondary" onClick={() => void cmd('clearForce')}>
-              Cancelar forzado
+              {t('dev.cancelForce')}
             </Button>
           )}
         </div>
@@ -63,7 +63,7 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
           className="h-56 overflow-y-auto rounded-md border border-border/60 bg-muted/30 p-3 font-mono text-xs leading-relaxed"
         >
           {logs.length === 0 ? (
-            <div className="text-muted-foreground">Sin registros todavía…</div>
+            <div className="text-muted-foreground">{t('dev.noLogs')}</div>
           ) : (
             logs.map((line, i) => (
               <div key={i} className="whitespace-pre-wrap break-all text-muted-foreground">

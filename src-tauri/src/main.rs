@@ -38,14 +38,57 @@ struct Shared {
     child: Mutex<Option<Child>>,
 }
 
-/// Tray handles to update the visual state from the reader thread.
+/// Tray handles to update the visual state from the reader thread. The menu itself is
+/// rebuilt whenever the UI language changes, so its handles live behind a mutex too.
 struct TrayUi {
-    pause: CheckMenuItem<tauri::Wry>,
-    autostart: CheckMenuItem<tauri::Wry>,
+    menu: Mutex<TrayMenuHandles>,
     /// Last presence shown by the tray icon (`Some(true)` = online). The icon is only
     /// replaced when it changes: re-setting the same image on every tick is needless
     /// work and can make the tray icon flicker on Windows.
     online: Mutex<Option<bool>>,
+    /// Language the current menu was built with (rebuilt only when it changes).
+    language: Mutex<String>,
+}
+
+/// Menu items whose state is refreshed from sidecar events.
+struct TrayMenuHandles {
+    pause: CheckMenuItem<tauri::Wry>,
+    autostart: CheckMenuItem<tauri::Wry>,
+}
+
+/// Tray menu labels per UI language. The tooltip comes from the sidecar (which knows the
+/// next transition); the menu is composed here because it belongs to the shell.
+struct TrayLabels {
+    show: &'static str,
+    online30: &'static str,
+    invisible: &'static str,
+    pause: &'static str,
+    autostart: &'static str,
+    quit: &'static str,
+}
+
+impl TrayLabels {
+    fn for_language(lang: &str) -> Self {
+        if lang == "en" {
+            Self {
+                show: "Open panel",
+                online30: "Online for 30 min",
+                invisible: "Invisible now",
+                pause: "Pause automation",
+                autostart: "Start with Windows",
+                quit: "Exit",
+            }
+        } else {
+            Self {
+                show: "Abrir panel",
+                online30: "Conectado 30 min",
+                invisible: "Invisible ahora",
+                pause: "Pausar automatización",
+                autostart: "Iniciar con Windows",
+                quit: "Salir",
+            }
+        }
+    }
 }
 
 fn push_log(shared: &Shared, line: String) {
@@ -64,6 +107,16 @@ fn data_dir(app: &AppHandle) -> std::path::PathBuf {
     let dir = base.join("steam-auto-status");
     let _ = std::fs::create_dir_all(&dir);
     dir
+}
+
+/// Reads the UI language from config.json (read-only peek) so the tray menu comes up in the
+/// right language before the first state event; later changes arrive through sidecar state.
+fn config_language(app: &AppHandle) -> String {
+    std::fs::read_to_string(data_dir(app).join("config.json"))
+        .ok()
+        .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
+        .and_then(|v| v.get("language").and_then(|l| l.as_str()).map(str::to_string))
+        .unwrap_or_else(|| "es".to_string())
 }
 
 /// Removes the extended path prefix (`\\?\`, `\\?\UNC\`) that `canonicalize()` adds on
@@ -147,7 +200,7 @@ fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
                     let stderr = child.stderr.take();
                     *shared.stdin.lock().unwrap() = child.stdin.take();
                     *shared.child.lock().unwrap() = Some(child);
-                    push_log(&shared, "Sidecar iniciado".into());
+                    push_log(&shared, "Sidecar started".into());
 
                     if let Some(stderr) = stderr {
                         let app_err = app.clone();
@@ -195,13 +248,13 @@ fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
                     }
 
                     if !QUITTING.load(Ordering::SeqCst) {
-                        push_log(&shared, format!("Sidecar terminó; reintento en {backoff} ms"));
+                        push_log(&shared, format!("Sidecar exited; retrying in {backoff} ms"));
                         std::thread::sleep(Duration::from_millis(backoff));
                         backoff = (backoff * 2).min(15_000);
                     }
                 }
                 Err(e) => {
-                    push_log(&shared, format!("No se pudo iniciar el sidecar ({e}); reintento en {backoff} ms"));
+                    push_log(&shared, format!("Could not start the sidecar ({e}); retrying in {backoff} ms"));
                     std::thread::sleep(Duration::from_millis(backoff));
                     backoff = (backoff * 2).min(15_000);
                 }
@@ -212,7 +265,7 @@ fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
 
 fn handle_sidecar_line(app: &AppHandle, shared: &Arc<Shared>, line: &str) {
     let Ok(value) = serde_json::from_str::<Value>(line) else {
-        push_log(shared, format!("sidecar: salida no JSON: {line}"));
+        push_log(shared, format!("sidecar: non-JSON output: {line}"));
         return;
     };
 
@@ -283,23 +336,59 @@ fn update_tray(app: &AppHandle, state: &Value) {
             }
         }
     }
-    if let Some(ui) = app.try_state::<TrayUi>() {
-        if let Some(paused) = state.get("paused").and_then(|p| p.as_bool()) {
-            let _ = ui.pause.set_checked(paused);
+
+    let Some(ui) = app.try_state::<TrayUi>() else {
+        return;
+    };
+    let paused = state.get("paused").and_then(|p| p.as_bool());
+    let autostart = state
+        .get("config")
+        .and_then(|c| c.get("startWithWindows"))
+        .and_then(|s| s.as_bool());
+    let language = state
+        .get("config")
+        .and_then(|c| c.get("language"))
+        .and_then(|l| l.as_str())
+        .unwrap_or("es");
+
+    // A language change rebuilds the whole menu (labels are baked into the items), keeping
+    // the current check states.
+    let language_changed = {
+        let mut current = ui.language.lock().unwrap();
+        if current.as_str() == language {
+            false
+        } else {
+            *current = language.to_string();
+            true
         }
-        if let Some(sw) = state
-            .get("config")
-            .and_then(|c| c.get("startWithWindows"))
-            .and_then(|s| s.as_bool())
-        {
-            let _ = ui.autostart.set_checked(sw);
+    };
+    if language_changed {
+        if let Ok((menu, handles)) = build_tray_menu(
+            app,
+            language,
+            paused.unwrap_or(false),
+            autostart.unwrap_or(false),
+        ) {
+            if let Some(tray) = app.tray_by_id("main") {
+                let _ = tray.set_menu(Some(menu));
+            }
+            *ui.menu.lock().unwrap() = handles;
         }
+        return;
+    }
+
+    let menu = ui.menu.lock().unwrap();
+    if let Some(paused) = paused {
+        let _ = menu.pause.set_checked(paused);
+    }
+    if let Some(autostart) = autostart {
+        let _ = menu.autostart.set_checked(autostart);
     }
 }
 
 fn send_to_sidecar(shared: &Shared, method: &str, params: Option<Value>) -> Result<(), String> {
     let mut guard = shared.stdin.lock().unwrap();
-    let stdin = guard.as_mut().ok_or("El sidecar no está disponible")?;
+    let stdin = guard.as_mut().ok_or("The sidecar is not available")?;
     let id = CMD_SEQ.fetch_add(1, Ordering::SeqCst);
     let msg = json!({
         "type": "cmd",
@@ -339,7 +428,7 @@ fn show_window(app: &AppHandle) {
         Ok(w) => attach_window_events(&w),
         Err(e) => push_log(
             &app.state::<Arc<Shared>>(),
-            format!("No se pudo crear la ventana: {e}"),
+            format!("Could not create the window: {e}"),
         ),
     }
 }
@@ -399,7 +488,7 @@ fn open_data_folder(app: AppHandle) -> Result<(), String> {
 #[tauri::command]
 fn open_url(app: AppHandle, url: String) -> Result<(), String> {
     if !url.starts_with("https://") && !url.starts_with("http://") {
-        return Err("Solo se permiten enlaces http/https".into());
+        return Err("Only http/https links are allowed".into());
     }
     app.opener()
         .open_url(url, None::<&str>)
@@ -423,40 +512,49 @@ fn quit_app(app: AppHandle, shared: tauri::State<'_, Arc<Shared>>) {
 
 // ---------------------------------------------------------------- tray
 
-fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
-    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+/// Builds the tray menu for a language, with the given check states. Returns the menu plus
+/// the handles that later state events need to refresh.
+fn build_tray_menu(
+    app: &AppHandle,
+    lang: &str,
+    paused: bool,
+    autostart_enabled: bool,
+) -> tauri::Result<(Menu<tauri::Wry>, TrayMenuHandles)> {
+    let labels = TrayLabels::for_language(lang);
 
-    let show = MenuItem::with_id(app, "show", "Abrir panel", true, None::<&str>)?;
-    let online30 = MenuItem::with_id(app, "online30", "Conectado 30 min", true, None::<&str>)?;
-    let invisible = MenuItem::with_id(app, "invisible", "Invisible ahora", true, None::<&str>)?;
-    let pause = CheckMenuItem::with_id(
-        app,
-        "pause",
-        "Pausar automatización",
-        true,
-        false,
-        None::<&str>,
-    )?;
+    let show = MenuItem::with_id(app, "show", labels.show, true, None::<&str>)?;
+    let online30 = MenuItem::with_id(app, "online30", labels.online30, true, None::<&str>)?;
+    let invisible = MenuItem::with_id(app, "invisible", labels.invisible, true, None::<&str>)?;
+    let pause = CheckMenuItem::with_id(app, "pause", labels.pause, true, paused, None::<&str>)?;
     let autostart = CheckMenuItem::with_id(
         app,
         "autostart",
-        "Iniciar con Windows",
+        labels.autostart,
         true,
         autostart_enabled,
         None::<&str>,
     )?;
     let separator = PredefinedMenuItem::separator(app)?;
-    let quit = MenuItem::with_id(app, "quit", "Salir", true, None::<&str>)?;
+    let quit = MenuItem::with_id(app, "quit", labels.quit, true, None::<&str>)?;
 
     let menu = Menu::with_items(
         app,
         &[&show, &online30, &invisible, &pause, &autostart, &separator, &quit],
     )?;
+    Ok((menu, TrayMenuHandles { pause, autostart }))
+}
+
+fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
+    let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
+    // The menu comes up in the language saved in config.json; the pause checkmark starts
+    // unchecked and the first state event (moments after the sidecar starts) refreshes it.
+    let language = config_language(app);
+    let (menu, handles) = build_tray_menu(app, &language, false, autostart_enabled)?;
 
     app.manage(TrayUi {
-        pause: pause.clone(),
-        autostart: autostart.clone(),
+        menu: Mutex::new(handles),
         online: Mutex::new(Some(false)),
+        language: Mutex::new(language),
     });
 
     // Start with the "invisible" tray icon: it is the presence until the sidecar reports
@@ -466,7 +564,7 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
         None => app
             .default_window_icon()
             .cloned()
-            .ok_or_else(|| tauri::Error::AssetNotFound("icono por defecto no disponible".into()))?,
+            .ok_or_else(|| tauri::Error::AssetNotFound("default icon not available".into()))?,
     };
 
     let shared_menu = shared.clone();
@@ -512,7 +610,7 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
                 "autostart" => {
                     let checked = app
                         .try_state::<TrayUi>()
-                        .map(|ui| ui.autostart.is_checked().unwrap_or(false))
+                        .and_then(|ui| ui.menu.lock().unwrap().autostart.is_checked().ok())
                         .unwrap_or(false);
                     let manager = app.autolaunch();
                     let result = if checked {
@@ -583,7 +681,7 @@ fn main() {
             Ok(())
         })
         .build(tauri::generate_context!())
-        .expect("error al construir la aplicación Tauri")
+        .expect("failed to build the Tauri application")
         .run(|app, event| {
             if let RunEvent::ExitRequested { api, code, .. } = &event {
                 if code.is_none() && !QUITTING.load(Ordering::SeqCst) {

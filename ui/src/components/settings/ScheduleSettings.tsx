@@ -3,7 +3,8 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
-import { DAY_LABELS, formatSchedule, windowMinutes } from '@/lib/schedule'
+import { useI18n } from '@/lib/i18n-context'
+import { DAY_ORDER, formatSchedule, windowMinutes } from '@/lib/schedule'
 import { cmd, type AppState, type Day } from '@/lib/tauri'
 import { cn } from '@/lib/utils'
 
@@ -15,13 +16,14 @@ const DEFAULT_SCHEDULE = {
 
 /** Settings › Schedule: Online window (hours and weekdays). */
 export function ScheduleSettings({ state }: { state: AppState | null }) {
+  const { t, lang } = useI18n()
   const cfg = state?.config
   const patch = (params: Record<string, unknown>) => void cmd('setConfig', params)
 
   const toggleDay = (day: Day) => {
     if (!cfg) return
     const has = cfg.days.includes(day)
-    const next = DAY_LABELS.map((d) => d.id).filter((d) => (d === day ? !has : cfg.days.includes(d)))
+    const next = DAY_ORDER.filter((d) => (d === day ? !has : cfg.days.includes(d)))
     patch({ days: next })
   }
 
@@ -30,16 +32,13 @@ export function ScheduleSettings({ state }: { state: AppState | null }) {
   return (
     <Card>
       <CardHeader>
-        <CardTitle>Horario</CardTitle>
-        <CardDescription>
-          Horario en hora local. Si la hora de fin es anterior a la de inicio, la franja termina al día siguiente
-          (p. ej. 17:30 → 01:00).
-        </CardDescription>
+        <CardTitle>{t('settings.schedule.title')}</CardTitle>
+        <CardDescription>{t('settings.schedule.description')}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-5">
         <div className="grid grid-cols-2 gap-4">
           <div className="grid gap-2">
-            <Label htmlFor="from">Conectado desde</Label>
+            <Label htmlFor="from">{t('settings.schedule.from')}</Label>
             <Input
               id="from"
               type="time"
@@ -49,7 +48,7 @@ export function ScheduleSettings({ state }: { state: AppState | null }) {
             />
           </div>
           <div className="grid gap-2">
-            <Label htmlFor="until">Hasta</Label>
+            <Label htmlFor="until">{t('settings.schedule.until')}</Label>
             <Input
               id="until"
               type="time"
@@ -61,38 +60,36 @@ export function ScheduleSettings({ state }: { state: AppState | null }) {
         </div>
 
         <div className="grid gap-2">
-          <Label>Días</Label>
+          <Label>{t('settings.schedule.days')}</Label>
           <div className="flex flex-wrap gap-2">
-            {DAY_LABELS.map((d) => {
-              const active = cfg?.days.includes(d.id) ?? false
+            {DAY_ORDER.map((day) => {
+              const active = cfg?.days.includes(day) ?? false
               return (
                 <Button
-                  key={d.id}
+                  key={day}
                   type="button"
                   size="sm"
                   variant={active ? 'default' : 'outline'}
                   className={cn('w-14', !active && 'text-muted-foreground')}
                   disabled={!cfg}
-                  onClick={() => toggleDay(d.id)}
+                  onClick={() => toggleDay(day)}
                 >
-                  {d.label}
+                  {t(`day.${day}`)}
                 </Button>
               )
             })}
           </div>
         </div>
 
-        {noWindow && (
-          <p className="text-xs text-amber-400">
-            La hora de inicio y la de fin coinciden: ahora mismo no habría ninguna franja Conectado.
-          </p>
-        )}
+        {noWindow && <p className="text-xs text-amber-400">{t('settings.schedule.noWindowWarning')}</p>}
 
         <div className="flex flex-wrap items-center justify-between gap-3 border-t border-border/60 pt-4">
-          <p className="text-xs text-muted-foreground">{cfg ? formatSchedule(cfg) : 'Cargando…'}</p>
+          <p className="text-xs text-muted-foreground">
+            {cfg ? formatSchedule(cfg, t, lang) : t('common.loading')}
+          </p>
           <Button variant="ghost" size="sm" disabled={!cfg} onClick={() => patch(DEFAULT_SCHEDULE)}>
             <RotateCcw />
-            Restaurar por defecto
+            {t('settings.schedule.restore')}
           </Button>
         </div>
       </CardContent>

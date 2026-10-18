@@ -1,28 +1,43 @@
 import { getVersion } from '@tauri-apps/api/app'
-import { isTauri, type AppState } from '@/lib/tauri'
+import { formatClock, type Translate } from '@/lib/i18n'
+import { isTauri, type AppState, type Language } from '@/lib/tauri'
 
-/** Text copied by Settings › Data › "Copiar diagnóstico" (version, state snapshot, recent log). */
-export async function buildDiagnostics(state: AppState | null, logs: string[]): Promise<string> {
-  let version = 'desconocida'
+/** Text copied by Settings › Data › "Copy diagnostics" (version, state snapshot, recent log). */
+export async function buildDiagnostics(
+  state: AppState | null,
+  logs: string[],
+  t: Translate,
+  lang: Language,
+): Promise<string> {
+  let version = t('diag.unknown')
   try {
     if (isTauri) version = await getVersion()
   } catch {
     /* running outside the shell (e.g. browser preview) */
   }
 
-  const out: string[] = ['=== Steam Auto Status — diagnóstico ===', `Versión: ${version}`]
+  const out: string[] = [t('diag.title'), t('diag.version', { value: version })]
   if (state) {
     out.push(
-      `Carpeta de datos: ${state.dataDir}`,
-      `Conexión: ${state.connection} · fase: ${state.loginPhase}`,
-      `Presencia: ${state.persona ?? '—'} (deseada: ${state.desired}) · en franja: ${state.inWindow} · pausada: ${state.paused}`,
-      `Cuenta: ${state.account?.name ?? '—'} (${state.account?.steamID ?? '—'})`,
-      `Horario: ${state.config.days.join(', ')} ${state.config.onlineFrom}→${state.config.onlineUntil}`,
-      `Último error: ${state.lastError?.message ?? 'ninguno'}`,
+      t('diag.dataDir', { value: state.dataDir }),
+      t('diag.connection', { conn: state.connection, phase: state.loginPhase }),
+      t('diag.presence', {
+        persona: state.persona ?? '—',
+        desired: state.desired,
+        inWindow: state.inWindow,
+        paused: state.paused,
+      }),
+      t('diag.account', { name: state.account?.name ?? '—', steamID: state.account?.steamID ?? '—' }),
+      t('diag.schedule', {
+        days: state.config.days.join(', '),
+        from: formatClock(state.config.onlineFrom, lang),
+        until: formatClock(state.config.onlineUntil, lang),
+      }),
+      t('diag.lastError', { value: state.lastError?.message ?? t('diag.none') }),
     )
   } else {
-    out.push('Estado: aún no recibido')
+    out.push(t('diag.noState'))
   }
-  out.push('', '--- Registro reciente ---', ...logs.slice(-100))
+  out.push('', t('diag.logHeader'), ...logs.slice(-100))
   return out.join('\n')
 }

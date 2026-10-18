@@ -1,17 +1,8 @@
-import type { Config, Day } from '@/lib/tauri'
+import { formatClock, type Translate } from '@/lib/i18n'
+import type { Config, Day, Language } from '@/lib/tauri'
 
 /** Weekday order (Monday first) used across the schedule UI. */
 export const DAY_ORDER: Day[] = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun']
-
-export const DAY_LABELS: { id: Day; label: string }[] = [
-  { id: 'mon', label: 'Lun' },
-  { id: 'tue', label: 'Mar' },
-  { id: 'wed', label: 'Mié' },
-  { id: 'thu', label: 'Jue' },
-  { id: 'fri', label: 'Vie' },
-  { id: 'sat', label: 'Sáb' },
-  { id: 'sun', label: 'Dom' },
-]
 
 const DAY_MINUTES = 24 * 60
 
@@ -25,27 +16,27 @@ export function windowMinutes(from: string, until: string): number {
   return (toMinutes(until) - toMinutes(from) + DAY_MINUTES) % DAY_MINUTES
 }
 
-/** Human-readable window length: "7 h 30 min", "45 min" or "sin franja". */
-export function formatWindowLength(from: string, until: string): string {
+/** Human-readable window length: "7 h 30 min" / "7h 30m", or the "no window" label. */
+export function formatWindowLength(from: string, until: string, t: Translate): string {
   const total = windowMinutes(from, until)
-  if (total === 0) return 'sin franja'
+  if (total === 0) return t('schedule.noWindow')
   const h = Math.floor(total / 60)
   const m = total % 60
-  if (h === 0) return `${m} min`
-  return m === 0 ? `${h} h` : `${h} h ${m} min`
+  if (h === 0) return t('schedule.minutes', { m })
+  return m === 0 ? t('schedule.hours', { h }) : t('schedule.hoursMinutes', { h, m })
 }
 
-function summarizeDays(days: Day[]): string {
+function summarizeDays(days: Day[], t: Translate): string {
   const set = new Set(days)
   const sorted = DAY_ORDER.filter((d) => set.has(d))
-  if (sorted.length === 0) return 'Ningún día'
-  if (sorted.length === 7) return 'Todos los días'
-  if (sorted.join(',') === 'mon,tue,wed,thu,fri') return 'Lun–Vie'
-  if (sorted.join(',') === 'sat,sun') return 'Sáb y Dom'
-  return sorted.map((d) => DAY_LABELS.find((x) => x.id === d)?.label ?? d).join(', ')
+  if (sorted.length === 0) return t('schedule.noDays')
+  if (sorted.length === 7) return t('schedule.everyDay')
+  if (sorted.join(',') === 'mon,tue,wed,thu,fri') return t('schedule.weekdays')
+  if (sorted.join(',') === 'sat,sun') return t('schedule.weekend')
+  return sorted.map((d) => t(`day.${d}`)).join(', ')
 }
 
-/** One-line summary like "Lun–Vie · 17:30 → 01:00 · 7 h 30 min". */
-export function formatSchedule(cfg: Config): string {
-  return `${summarizeDays(cfg.days)} · ${cfg.onlineFrom} → ${cfg.onlineUntil} · ${formatWindowLength(cfg.onlineFrom, cfg.onlineUntil)}`
+/** One-line summary like "Lun–Vie · 17:30 → 01:00 · 7 h 30 min" in the active language. */
+export function formatSchedule(cfg: Config, t: Translate, lang: Language): string {
+  return `${summarizeDays(cfg.days, t)} · ${formatClock(cfg.onlineFrom, lang)} → ${formatClock(cfg.onlineUntil, lang)} · ${formatWindowLength(cfg.onlineFrom, cfg.onlineUntil, t)}`
 }
