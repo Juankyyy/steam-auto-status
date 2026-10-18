@@ -123,6 +123,10 @@ and publishes the release with the installer attached. Curated notes live in
 
 </details>
 
+## 📄 License
+
+[GPL-3.0](LICENSE) — free to use, study, share and improve.
+
 ---
 
 Made by [@Juankyyy](https://github.com/Juankyyy) · Ideas and bug reports are welcome in
