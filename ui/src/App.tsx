@@ -1,11 +1,11 @@
-import { useEffect, useState } from 'react'
-import { ConfigPanel } from '@/components/ConfigPanel'
-import { LoginPanel } from '@/components/LoginPanel'
-import { StatusPanel } from '@/components/StatusPanel'
-import { TestsPanel } from '@/components/TestsPanel'
-import { Badge } from '@/components/ui/badge'
+import { useEffect, useMemo, useState } from 'react'
+import { HashRouter, Navigate, Route, Routes } from 'react-router'
+import { Layout } from '@/components/Layout'
 import { TooltipProvider } from '@/components/ui/tooltip'
+import { AppContext, type AppContextValue } from '@/lib/app-context'
 import { cmd, getCachedState, isHiddenLaunch, isTauri, onSidecarMessage, showMainWindow, type AppState } from '@/lib/tauri'
+import { Dashboard } from '@/pages/Dashboard'
+import { Settings } from '@/pages/Settings'
 
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
@@ -66,75 +66,27 @@ export default function App() {
     }
   }, [])
 
-  const showLogin =
-    !!state && state.connection !== 'connected' && (!state.authPresent || !!state.guardNeeded || needLogin)
-
-  const connectionBadge = () => {
-    if (!state) return <Badge variant="outline">Cargando…</Badge>
-    switch (state.connection) {
-      case 'connected':
-        return (
-          <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
-            Conectado a Steam
-          </Badge>
-        )
-      case 'connecting':
-        return (
-          <Badge variant="outline" className="border-amber-500/40 text-amber-400">
-            Conectando…
-          </Badge>
-        )
-      default:
-        return (
-          <Badge variant="outline" className="border-red-500/40 text-red-400">
-            Sin conexión
-          </Badge>
-        )
-    }
-  }
+  // Shared with every module through the app context (see lib/app-context.ts)
+  const appData = useMemo<AppContextValue>(
+    () => ({ state, logs, needLogin, loginReason }),
+    [state, logs, needLogin, loginReason],
+  )
 
   return (
     <TooltipProvider>
-      <div className="flex min-h-screen flex-col bg-background text-foreground">
-        <header className="flex items-center gap-3 border-b border-border/60 px-6 py-4">
-          <span
-            className={
-              'size-2.5 rounded-full ' +
-              (state?.persona === 'online'
-                ? 'bg-emerald-400'
-                : state?.connection === 'connected'
-                  ? 'bg-zinc-500'
-                  : 'bg-red-500/70')
-            }
-          />
-          <h1 className="text-lg font-semibold tracking-tight">Steam Auto Status</h1>
-          <span className="text-xs text-muted-foreground">Panel de control</span>
-          <div className="ml-auto">{connectionBadge()}</div>
-        </header>
-
-        <main className="grid flex-1 gap-6 p-6">
-          <StatusPanel state={state} />
-
-          {showLogin && (
-            <LoginPanel
-              guard={state?.guardNeeded ?? null}
-              phase={state?.loginPhase ?? 'idle'}
-              qrDataUrl={state?.qrDataUrl ?? null}
-              error={state?.lastError?.message ?? null}
-              reason={loginReason}
-            />
-          )}
-
-          <div className="grid items-start gap-6 xl:grid-cols-2">
-            <ConfigPanel state={state} />
-            <TestsPanel state={state} logs={logs} />
-          </div>
-        </main>
-
-        <footer className="px-6 pb-5 text-xs text-muted-foreground">
-          Datos en <span className="font-mono">{state?.dataDir ?? '—'}</span>
-        </footer>
-      </div>
+      <AppContext.Provider value={appData}>
+        {/* Hash routing: works in the Tauri webview and on a static PWA host alike
+            (deep links land on index.html, so no server rewrites are needed). */}
+        <HashRouter>
+          <Routes>
+            <Route element={<Layout />}>
+              <Route index element={<Dashboard />} />
+              <Route path="settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Route>
+          </Routes>
+        </HashRouter>
+      </AppContext.Provider>
     </TooltipProvider>
   )
 }

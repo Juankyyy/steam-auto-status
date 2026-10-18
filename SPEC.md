@@ -137,7 +137,13 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
 
 ### 4.4 UI — `ui/`
 
-Pantalla única (ventana ~900×620) con tres zonas y tema oscuro por defecto:
+Ventana ~900×620, tema oscuro por defecto, organizada en **módulos** navegables desde una
+barra de navegación en la cabecera (React Router con `HashRouter`: funciona igual en el
+webview de Tauri y en un futuro despliegue PWA servido como sitio estático). Objetivo a
+medio plazo: que la interfaz sea instalable como **PWA**; el primer paso ha sido separar
+el panel de control del módulo de ajustes.
+
+**Panel de control** (`/`): la pantalla clásica, con sus tres zonas:
 
 1. **Estado**: "Conectado (dentro de ventana)" / "Invisible" + cuenta atrás a la próxima
    transición ("Online en 2 h 14 min" / "Invisible a la 01:00").
@@ -155,6 +161,10 @@ Pantalla única (ventana ~900×620) con tres zonas y tema oscuro por defecto:
      (`startWithCredentials`): si Steam pide confirmación desde la app móvil, el panel lo
      indica y se completa al aprobar; si pide código (email o app), aparece el campo de
      código (`submitSteamGuardCode`, con manejo de "código incorrecto → esperar 30 s").
+
+**Ajustes** (`/settings`): de momento un *placeholder*; su contenido se definirá en la
+siguiente iteración (previsiblemente recogerá la configuración hoy integrada en el panel
+de control).
 
 Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
 `emit` al webview.
