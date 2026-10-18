@@ -150,7 +150,9 @@ medio plazo: que la interfaz sea instalable como **PWA**; el primer paso ha sido
 el panel de control del módulo de ajustes. La cabecera muestra a la derecha el chip de la
 cuenta (avatar cuadrado con esquinas redondeadas estilo icono de iOS + nombre + punto de
 estado), el badge de conexión mientras no haya cuenta, o un botón **Iniciar sesión**
-cuando no existe ninguna sesión guardada.
+cuando no existe ninguna sesión guardada. Junto al nombre de la app hay un badge con la
+versión (`vX.Y.Z`, inyectada en tiempo de build desde `tauri.conf.json`; es la misma
+fuente que usa «Acerca de»).
 
 **Panel de control** (`/`): la pantalla clásica, con sus tres zonas:
 

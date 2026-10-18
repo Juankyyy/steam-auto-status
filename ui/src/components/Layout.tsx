@@ -62,7 +62,12 @@ export function Layout() {
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
       <header className="flex flex-wrap items-center gap-x-4 gap-y-3 border-b border-border/60 px-6 py-3">
-        <h1 className="text-lg font-semibold tracking-tight">Steam Auto Status</h1>
+        <div className="flex items-center gap-2">
+          <h1 className="text-lg font-semibold tracking-tight">Steam Auto Status</h1>
+          <Badge variant="outline" className="font-mono text-muted-foreground">
+            v{__APP_VERSION__}
+          </Badge>
+        </div>
 
         <nav aria-label="Módulos" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
           {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (

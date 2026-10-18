@@ -1,31 +1,17 @@
-import { useEffect, useState } from 'react'
-import { getVersion } from '@tauri-apps/api/app'
 import { Bug, Download, ExternalLink } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { isTauri, openUrl } from '@/lib/tauri'
+import { openUrl } from '@/lib/tauri'
 
 const REPO_URL = 'https://github.com/Juankyyy/steam-auto-status'
 
 /** Settings › About: version and links to the project. */
 export function AboutSettings() {
-  const [version, setVersion] = useState('—')
-
-  useEffect(() => {
-    void (async () => {
-      try {
-        if (isTauri) setVersion(await getVersion())
-      } catch {
-        /* running outside the shell (e.g. browser preview) */
-      }
-    })()
-  }, [])
-
   return (
     <Card>
       <CardHeader>
         <CardTitle>Acerca de</CardTitle>
-        <CardDescription>Steam Auto Status {version}</CardDescription>
+        <CardDescription>Steam Auto Status v{__APP_VERSION__}</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-4">
         <p className="text-xs text-muted-foreground">
