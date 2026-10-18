@@ -444,8 +444,8 @@ function newClient(): SteamUser {
     pushState();
   });
 
-  u.on('accountInfo', (info: { name?: string }) => {
-    if (info && info.name) log(`Cuenta: ${info.name}`);
+  u.on('accountInfo', (name: string) => {
+    if (name) log(`Cuenta: ${name}`);
     pushState();
   });
 
@@ -694,6 +694,10 @@ function startQrLogin() {
     .startWithQR()
     .then(async (res) => {
       if (qrSession !== session) return;
+      if (!res.qrChallengeUrl) {
+        onLoginSessionError(session, new Error('Steam no devolvió la URL del código QR'));
+        return;
+      }
       qrDataUrl = await QRCode.toDataURL(res.qrChallengeUrl, { width: 288, margin: 2 });
       log('Código QR listo: escanéalo con la app móvil de Steam');
       pushState();
@@ -726,13 +730,14 @@ async function startCredsLogin(accountName: string, password: string) {
       return;
     }
 
-    const hasCode = res.validActions.some(
+    const validActions = res.validActions ?? [];
+    const hasCode = validActions.some(
       (a) => a.type === EAuthSessionGuardType.EmailCode || a.type === EAuthSessionGuardType.DeviceCode,
     );
-    const hasConfirmation = res.validActions.some(
+    const hasConfirmation = validActions.some(
       (a) => a.type === EAuthSessionGuardType.DeviceConfirmation || a.type === EAuthSessionGuardType.EmailConfirmation,
     );
-    const email = res.validActions.find((a) => a.type === EAuthSessionGuardType.EmailCode)?.detail ?? null;
+    const email = validActions.find((a) => a.type === EAuthSessionGuardType.EmailCode)?.detail ?? null;
 
     loggingIn = false;
     if (hasCode) {
