@@ -2,6 +2,7 @@
 #
 # - Pushing a `vX.Y.Z` tag: sets the version from the tag, builds and publishes the
 #   release with the installer attached (name: steam-auto-status_X.Y.Z_x64-setup.exe).
+#   The release title comes from the notes first line (`<!-- title: ... -->`).
 # - workflow_dispatch: only builds and leaves the installer as an artifact, to test
 #   the pipeline without publishing anything.
 name: Release
@@ -70,13 +71,29 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           $tag = $env:GITHUB_REF_NAME
+          $notes = "release-notes/$tag.md"
+
+          # Release title: the first line of the notes file carries it as a hidden HTML
+          # comment, e.g. `<!-- title: v0.2.0 - The Settings Update -->`. The tag stays the
+          # source of truth for the version; fallback is the historic default title.
+          $title = "Steam Auto Status $tag"
+          if (Test-Path $notes) {
+            $first = Get-Content $notes -TotalCount 1
+            if ($first -match '^\s*<!--\s*title:\s*(.+?)\s*-->\s*$') { $title = $Matches[1] }
+          }
+
           gh release view $tag 2>$null
           if ($LASTEXITCODE -eq 0) {
-            # The release already existed: we only update the installer.
+            # The release already existed: update the installer and, when curated, the
+            # title/notes too.
             gh release upload $tag $env:ASSET --clobber
+            if (Test-Path $notes) {
+              gh release edit $tag --title $title --notes-file $notes
+            } else {
+              gh release edit $tag --title $title
+            }
           } else {
-            $args = @('release', 'create', $tag, $env:ASSET, '--title', "Steam Auto Status $tag")
-            $notes = "release-notes/$tag.md"
+            $args = @('release', 'create', $tag, $env:ASSET, '--title', $title)
             if (Test-Path $notes) { $args += @('--notes-file', $notes) } else { $args += '--generate-notes' }
             if ($tag -match '-') { $args += '--prerelease' }
             gh @args
