@@ -349,7 +349,17 @@ Disco instalado estimado: ~60–90 MB.
   si no, el workflow las autogenera desde los commits convencionales (`feat:`, `fix:`…)
   desde el tag anterior.
 - **Idioma**: todo en **inglés** — código (incluidos comentarios), commits y release notes.
-- **Estilo de las release notes**: en inglés, **con emojis** y formato amigable
-  (highlights + instalación + requisitos). El cuerpo publicado en GitHub debe ser igual a
+- **Título de la release**: `vX.Y.Z - The <Tema> Update`, donde `<Tema>` resume en inglés
+  lo más importante de la release (Title Case; el título siempre termina en "Update"). La
+  fuente es la primera línea de `release-notes/vX.Y.Z.md`, un comentario HTML oculto con el
+  formato `<!-- title: vX.Y.Z - The <Tema> Update -->` que el workflow lee para titular la
+  release; si falta, el título por defecto es `Steam Auto Status vX.Y.Z`.
+- **Estilo de las release notes**: en inglés, con emojis **en los títulos de sección** y
+  formato amigable. Estructura: (1) contexto breve de la actualización; (2) sección
+  destacada `## <emoji> <título descriptivo>` con lo más importante, relacionada con el
+  `<Tema>` del título pero sin repetirlo (p. ej. "The Settings Update" → "⚙️ Settings
+  module"), seguida de un párrafo y bullets `- **Nombre**: descripción`; (3) `## ✨ What's
+  new` con el resto de novedades. Instalación, datos, requisitos y actualización viven en
+  el README, no en las notas. El cuerpo publicado en GitHub debe ser igual a
   `release-notes/vX.Y.Z.md`.
 - **Aviso previo**: no se hacen commits ni pushes sin previo aviso al usuario.
