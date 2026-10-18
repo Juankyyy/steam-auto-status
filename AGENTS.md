@@ -99,10 +99,11 @@ Ejecuta lo que aplique a lo tocado; no lo omitas:
 1. Todo el trabajo nuevo en la rama `dev`; `main` permanece estable.
 2. **Paso a paso**: espera a que el usuario pida módulos o cambios concretos; no generes la
    app entera de golpe. Al terminar, indica qué debe probar el usuario.
-3. **Aviso previo**: no se hacen commits ni pushes sin avisar antes. Propón el mensaje de
-   commit y espera el OK del usuario.
-4. **Sin publicar hasta verificar**: push a `dev` y merge a `main` solo después de que el
-   usuario verifique el bloque/funcionalidad en su máquina.
+3. **Aviso previo**: no se hacen commits ni pushes sin avisar antes. Propón el mensaje y
+   espera el OK. «Haz los commits» autoriza commit **y push a `dev`** a la vez: el trabajo
+   nunca se queda solo en local.
+4. **`main` y releases, solo a petición**: el merge a `main` y los tags se hacen únicamente
+   cuando el usuario lo pide, tras verificar el bloque/funcionalidad en su máquina.
 5. **Releases**: el usuario decide la versión; el tag `vX.Y.Z` se corta desde `main` y
    GitHub Actions publica el instalador (SPEC §9 y `release-notes/README.md`).
 6. **Documentación como parte del cambio**: actualiza SPEC.md si cambia el comportamiento o

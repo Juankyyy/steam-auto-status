@@ -339,9 +339,10 @@ Disco instalado estimado: ~60–90 MB.
 ## 9. Flujo de trabajo (acordado con el usuario)
 
 - Todo el trabajo nuevo se hace en la rama **`dev`**; `main` permanece estable.
-- **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
-  bloque/funcionalidad en su máquina. Los commits locales exigen aviso previo: el agente
-  propone el mensaje y espera el OK del usuario antes de commitear.
+- **Nada se commitea por iniciativa del agente**: propone el mensaje y espera el OK. «Haz
+  los commits» significa commitear **y subir a `dev`** (el trabajo no se queda solo en
+  local); el merge a `main` y los releases se hacen solo cuando el usuario lo pide, tras
+  verificar el bloque en su máquina.
 - **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos
 - **Comentarios:** Documenta las partes complejas
 - **Releases:** el usuario decide la versión (major/minor/patch a su criterio) y se corta
