@@ -8,6 +8,7 @@
     "build": "esbuild src/index.ts --bundle --platform=node --target=node20 --format=cjs --outfile=dist/sidecar.cjs --log-level=warning && node scripts/postbuild.mjs"
   },
   "dependencies": {
+    "lzma": "^2.3.2",
     "qrcode": "^1.5.4",
     "steam-session": "^1.9.4",
     "steam-user": "^5.0.0"

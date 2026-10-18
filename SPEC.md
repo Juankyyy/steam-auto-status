@@ -219,15 +219,29 @@ sus dispositivos, no para los amigos).
 
 ### 4.7 Empaquetado
 
-- **Sidecar**: bundle TS → ejecutable único (Node SEA); si diera problemas, `node.exe`
-  portable + JS dentro del instalador. `steam-user` es JS puro (sin módulos nativos), así
-  que el empaquetado es viable.
-- **Shell**: `tauri build` con target **NSIS** (instalador `.exe`, por usuario, accesos
-  directos, icono); sidecar incluido como `externalBin`; UI bundleada. Sin firma de código
-  → Windows SmartScreen avisará en la primera ejecución ("Editor desconocido" → Más
-  información → Ejecutar de todas formas). Actualizaciones manuales (reinstalar).
-- **WebView2**: ya viene preinstalado en Windows 10/11 (runtime de Edge); no hay que
-  distribuirlo.
+- **Sidecar**: esbuild bundlea el TS → `sidecar/dist/sidecar.cjs` (+ `system.pem`, que
+  `steam-crypto` lee relativo a `__dirname`; ambos los produce `sidecar/scripts/postbuild.mjs`).
+- **Runtime de Node**: la app instalada ejecuta el sidecar con un `node.exe` oficial
+  (v24.12.0 win-x64) que descarga `scripts/fetch-node-runtime.mjs` a `src-tauri/runtime/`
+  (verifica SHA256 contra nodejs.org; la carpeta está ignorada por git). En desarrollo se
+  usa el `node` del sistema.
+- **Shell**: `tauri build` con target **NSIS** (instalador `.exe`, instalación por
+  usuario sin admin, idiomas español/inglés). `bundle.resources` de `tauri.conf.json`
+  empaqueta `runtime/node.exe`, `sidecar/sidecar.cjs`, `sidecar/system.pem` y
+  `sidecar/node_modules/lzma/*` (steam-user lo exige en tiempo de ejecución y esbuild no
+  puede empaquetarlo por usar `require()` dinámico). `main.rs` además limpia el prefijo
+  extendido `\\?\` con que Tauri devuelve las rutas canonicalizadas, porque Node no lo
+  resuelve como argumento. Sin firma de código → Windows SmartScreen
+  avisará en la primera ejecución ("Editor desconocido" → Más información → Ejecutar de
+  todas formas). Actualizaciones manuales (reinstalar; los datos de `Documents` se
+  conservan).
+- **WebView2**: ya viene preinstalado en Windows 10/11 (runtime de Edge); el instalador
+  solo descarga el bootstrapper si faltara.
+- **Releases**: tag `vX.Y.Z` → workflow `.github/workflows/release.yml` (GitHub Actions)
+  compila en `windows-latest` y publica la release con el instalador adjunto
+  (`steam-auto-status_X.Y.Z_x64-setup.exe`). La versión se inyecta desde el tag con
+  `scripts/set-version.mjs` y `scripts/rename-installer.mjs` deja el nombre del artefacto
+  en ese formato (el tag es la fuente de verdad).
 
 ### 4.8 Presupuesto de recursos
 
@@ -263,27 +277,6 @@ Disco instalado estimado: ~60–90 MB.
 6. Primer login requiere el código 2FA una vez. Si el token caduca (p. ej. PC apagado
    >200 días), la app pedirá login otra vez (lo indicará en la UI y el log).
 
-## 6. Estado del proyecto
-
-- [x] Investigación técnica (steam-user, semántica multi-sesión, refresh tokens)
-- [x] Decisiones de alcance, arquitectura ligera (Tauri + sidecar) y GUI (bandeja + UI
-      shadcn)
-- [x] Datos en `Documents\steam-auto-status\` (config, auth, logs)
-- [x] Repositorio GitHub `steam-auto-status`: SPEC, README y `.gitignore` iniciales
-- [x] Toolchain de desarrollo: Rust + MSVC Build Tools + Tauri CLI
-- [x] Scaffold (Vite react-ts) + estructura `src-tauri/`, `ui/`, `sidecar/`
-- [x] Sidecar (lógica del núcleo + IPC stdio + postbuild de `system.pem`)
-- [x] Shell (bandeja, ventana bajo demanda, supervisión del sidecar, plugins)
-- [x] UI shadcn (estado con cuenta atrás / configuración / pruebas+log + formulario 2FA)
-- [x] Bloque 1 del login (verificado por el usuario): fix del campo de código +
-      login por QR con `steam-session`/`qrcode`
-- [x] Bloque 2 del login (verificado por el usuario): credenciales con `steam-session`
-      (aprobación desde móvil / código) + volcado de errores del sidecar a
-      `sidecar-stderr.log` + arranque `--hidden` sin abrir ventana
-- [ ] Prueba manual completa del usuario (login, forzados, franjas, bandeja)
-- [ ] Empaquetado del sidecar (runtime Node o SEA) + instalador NSIS
-- [ ] README final
-
 ## 7. Cómo verificar que funciona
 
 1. `npm install` y `tauri dev`; abrir el panel desde la bandeja; primer login en el
@@ -315,5 +308,11 @@ Disco instalado estimado: ~60–90 MB.
 - **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
   bloque/funcionalidad en su máquina. Los commits locales sobre `dev` sí se permiten;
   lo que se retiene es el push al remoto.
-- **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos (ej. "Crea la entidad de Room", "Crea la UI del widget con Glance").
-- **Comentarios:** Documenta las partes complejas, especialmente la interacción entre el BroadcastReceiver del widget y los coroutines.
+- **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos
+- **Comentarios:** Documenta las partes complejas
+- **Releases:** el usuario decide la versión (major/minor/patch a su criterio) y se corta
+  el tag `vX.Y.Z` desde `main`. GitHub Actions compila y publica la release con el
+  instalador adjunto (`.github/workflows/release.yml`); el tag es la fuente de verdad de
+  la versión. Notas de la release: si existe `release-notes/vX.Y.Z.md` se usa tal cual;
+  si no, el workflow las autogenera desde los commits convencionales (`feat:`, `fix:`…)
+  desde el tag anterior.

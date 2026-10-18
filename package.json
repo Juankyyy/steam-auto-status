@@ -7,10 +7,13 @@
     "sidecar"
   ],
   "scripts": {
-    "dev": "npm run build:sidecar && tauri dev",
-    "build": "npm run build:sidecar && tauri build",
+    "dev": "npm run build:sidecar && npm run fetch:runtime && tauri dev",
+    "build": "npm run build:sidecar && npm run fetch:runtime && tauri build && npm run rename:installer",
     "build:sidecar": "npm run build --workspace sidecar",
     "build:ui": "npm run build --workspace ui",
+    "fetch:runtime": "node scripts/fetch-node-runtime.mjs",
+    "rename:installer": "node scripts/rename-installer.mjs",
+    "set:version": "node scripts/set-version.mjs",
     "tauri": "tauri"
   },
   "devDependencies": {

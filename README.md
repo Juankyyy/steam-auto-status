@@ -25,3 +25,21 @@ Desktop application for Windows that automatically switches your Steam status be
 - Node.js 20+
 - Rust (rustup) + MSVC Build Tools
 - Windows 10/11 with WebView2 (preinstalled)
+
+## Building the installer
+
+```sh
+npm run build
+```
+
+Downloads the official Node runtime used by the sidecar (`scripts/fetch-node-runtime.mjs`,
+SHA256-verified) and produces the NSIS installer at
+`src-tauri/target/release/bundle/nsis/`. The build renames it to
+`steam-auto-status_X.Y.Z_x64-setup.exe` (lowercase, no spaces — the release asset format)
+with `scripts/rename-installer.mjs`.
+
+## Releases
+
+Push a `vX.Y.Z` tag from `main`: GitHub Actions compiles the app on Windows and publishes
+a release with the installer attached (`steam-auto-status_X.Y.Z_x64-setup.exe`). The tag
+is the single source of truth for the version.

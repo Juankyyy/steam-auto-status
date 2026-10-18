@@ -8,6 +8,9 @@ sidecar/dist/
 src-tauri/target/
 src-tauri/gen/
 
+# Runtime de Node empaquetado (lo descarga scripts/fetch-node-runtime.mjs)
+src-tauri/runtime/
+
 # Datos locales (config, token, logs) — nunca versionar
 data/
 *.log

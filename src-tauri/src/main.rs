@@ -59,6 +59,21 @@ fn data_dir(app: &AppHandle) -> std::path::PathBuf {
     dir
 }
 
+/// Quita el prefijo de ruta extendida (`\\?\`, `\\?\UNC\`) que `canonicalize()` agrega en
+/// Windows y que Tauri aplica al resolver la carpeta de recursos. Node no sabe resolver ese
+/// prefijo cuando llega como `argv[1]` (falla con `EISDIR`/`ENOENT`), así que lo limpiamos
+/// antes de construir la línea de comandos.
+fn strip_extended_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
+    let s = path.to_string_lossy();
+    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
+        std::path::PathBuf::from(format!(r"\\{rest}"))
+    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
+        std::path::PathBuf::from(rest)
+    } else {
+        path
+    }
+}
+
 /// Programa + argumentos para lanzar el sidecar (dev: node + bundle; prod: runtime empaquetado).
 fn sidecar_launch(app: &AppHandle) -> (std::path::PathBuf, Vec<String>) {
     let dir = data_dir(app);
@@ -79,10 +94,13 @@ fn sidecar_launch(app: &AppHandle) -> (std::path::PathBuf, Vec<String>) {
             ],
         )
     } else {
-        let res = app
-            .path()
-            .resource_dir()
-            .unwrap_or_else(|_| std::path::PathBuf::from("."));
+        // `resource_dir()` canonicaliza el exe: en Windows eso produce `\\?\C:\...`,
+        // que Node no puede resolver como argumento. Lo normalizamos.
+        let res = strip_extended_prefix(
+            app.path()
+                .resource_dir()
+                .unwrap_or_else(|_| std::path::PathBuf::from(".")),
+        );
         let node = res.join("runtime").join("node.exe");
         let entry = res.join("sidecar").join("sidecar.cjs");
         (
