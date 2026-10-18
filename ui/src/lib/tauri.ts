@@ -32,7 +32,7 @@ export interface AppState {
   paused: boolean
   forced: { persona: Persona; until: number } | null
   authPresent: boolean
-  account: { steamID: string; name: string | null } | null
+  account: { steamID: string; name: string | null; avatarUrl: string | null } | null
   nextTransition: { at: number; to: Persona } | null
   nextTransitionLabel: string
   config: Config

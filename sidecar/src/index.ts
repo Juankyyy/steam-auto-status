@@ -59,6 +59,7 @@ const logsDir = path.join(dataDir, 'logs');
 const logPath = path.join(logsDir, 'status.log');
 const configPath = path.join(dataDir, 'config.json');
 const authPath = path.join(dataDir, 'auth.json');
+const profilePath = path.join(dataDir, 'profile.json');
 const steamDataDir = path.join(dataDir, 'steam-data');
 
 // ---------------------------------------------------------------- IPC (stdin/stdout)
@@ -200,6 +201,97 @@ function clearAuth() {
   }
 }
 
+// ---------------------------------------------------------------- profile (avatar cache)
+
+interface ProfileFile {
+  steamID: string;
+  avatarUrl: string | null;
+}
+
+let profileCache: ProfileFile | null = null;
+let avatarSteamID: string | null = null; // account the current avatarUrl belongs to
+let avatarUrl: string | null = null;
+let avatarResolving: string | null = null; // steamID whose avatar is being resolved right now
+
+function loadProfile() {
+  try {
+    const raw = JSON.parse(fs.readFileSync(profilePath, 'utf8')) as ProfileFile;
+    profileCache = raw && typeof raw.steamID === 'string' ? raw : null;
+  } catch {
+    profileCache = null;
+  }
+}
+
+function saveProfile(p: ProfileFile) {
+  profileCache = p;
+  try {
+    fs.writeFileSync(profilePath, JSON.stringify(p, null, 2));
+  } catch (e) {
+    log(`No se pudo guardar profile.json: ${e}`);
+  }
+}
+
+/**
+ * Publishes the avatar for this account (the cached one first, so it shows instantly)
+ * and refreshes it from Steam in the background. Called on every logon, so a changed
+ * avatar is picked up without clearing the cache by hand.
+ */
+function applyAvatar(steamID: string) {
+  if (avatarSteamID !== steamID) {
+    avatarSteamID = steamID;
+    avatarUrl = profileCache?.steamID === steamID ? profileCache.avatarUrl : null;
+    pushState();
+  }
+  void fetchAvatar(steamID);
+}
+
+async function fetchAvatar(steamID: string) {
+  if (avatarResolving === steamID) return;
+  avatarResolving = steamID;
+  try {
+    const url = (await profileXmlAvatar(steamID)) ?? (await ownPersonaAvatar(steamID));
+    if (!url) return;
+    saveProfile({ steamID, avatarUrl: url });
+    if (avatarSteamID === steamID && url !== avatarUrl) {
+      avatarUrl = url;
+      log('Avatar de la cuenta actualizado');
+      pushState();
+    }
+  } finally {
+    avatarResolving = null;
+  }
+}
+
+/** Public profile XML: no API key or extra library needed; returns the current CDN URL. */
+async function profileXmlAvatar(steamID: string): Promise<string | null> {
+  try {
+    const res = await fetch(`https://steamcommunity.com/profiles/${steamID}?xml=1`, {
+      signal: AbortSignal.timeout(8_000),
+    });
+    if (!res.ok) return null;
+    const body = await res.text();
+    const m = body.match(/<avatarMedium>\s*(?:<!\[CDATA\[)?([\s\S]*?)(?:\]\]>)?\s*<\/avatarMedium>/);
+    return m?.[1] || null;
+  } catch {
+    return null;
+  }
+}
+
+/** Fallback: persona data from the Steam connection itself (no HTTP; may be empty for own account). */
+function ownPersonaAvatar(steamID: string): Promise<string | null> {
+  return new Promise((resolve) => {
+    if (!user) {
+      resolve(null);
+      return;
+    }
+    const timer = setTimeout(() => resolve(null), 5_000);
+    user.getPersonas([steamID], (err: Error | null, personas: Record<string, { avatar_url_medium?: string }>) => {
+      clearTimeout(timer);
+      resolve(err ? null : (personas?.[steamID]?.avatar_url_medium ?? null));
+    });
+  });
+}
+
 // ---------------------------------------------------------------- schedule
 
 const DAY_MS = 86_400_000;
@@ -299,6 +391,7 @@ function buildState() {
   const nt = nextTransition(now, cfg);
   const ntLabel = nt ? `${nt.to === 'online' ? 'Conectado' : 'Invisible'} a las ${hmLocal(nt.at)}` : 'Sin programación';
   const persona: Persona | null = appliedPersona ?? (steamConnected ? 'invisible' : null);
+  const steamID: string | null = user?.steamID ? user.steamID.toString() : null;
 
   let tooltip = 'Steam Auto Status';
   if (!auth) tooltip += ' — Inicia sesión';
@@ -315,7 +408,9 @@ function buildState() {
     paused: cfg.paused,
     forced: force && Date.now() < force.until ? { persona: force.persona, until: force.until } : null,
     authPresent: !!auth,
-    account: user && user.steamID ? { steamID: user.steamID.toString(), name: user.accountInfo?.name ?? null } : null,
+    account: steamID
+      ? { steamID, name: user?.accountInfo?.name ?? null, avatarUrl: avatarSteamID === steamID ? avatarUrl : null }
+      : null,
     nextTransition: nt,
     nextTransitionLabel: ntLabel,
     config: cfg,
@@ -345,6 +440,7 @@ function newClient(): SteamUser {
     lastError = null;
     log(`Conectado a Steam como ${u.steamID ?? '?'}`);
     applyPersona(true);
+    if (u.steamID) applyAvatar(u.steamID.toString());
     pushState();
   });
 
@@ -815,6 +911,7 @@ function handleCommand(msg: { id?: unknown; method?: string; params?: Record<str
 
 loadConfig();
 loadAuth();
+loadProfile();
 log(`Sidecar iniciado (datos en ${dataDir})`);
 start();
 

@@ -98,6 +98,9 @@ Lógica pura, independiente de la UI (emite eventos hacia el shell):
 7. Forzar estado (desde la UI de pruebas) con **timeout**: tras X minutos vuelve solo al
    modo automático.
 8. `logout`: borra `auth.json` (botón "Cerrar sesión" en la UI).
+9. **Avatar de la cuenta**: al conectar resuelve la URL del avatar (XML público del perfil
+   por HTTPS; fallback: `getPersonas` sobre la propia conexión), la cachea en
+   `profile.json` y la publica en el estado (`account.avatarUrl`) para la cabecera.
 
 **Semántica de la ventana horaria (cruza medianoche):** una ventana se define por
 `(día de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
@@ -144,7 +147,10 @@ Ventana ~900×620, tema oscuro por defecto, organizada en **módulos** navegable
 barra de navegación en la cabecera (React Router con `HashRouter`: funciona igual en el
 webview de Tauri y en un futuro despliegue PWA servido como sitio estático). Objetivo a
 medio plazo: que la interfaz sea instalable como **PWA**; el primer paso ha sido separar
-el panel de control del módulo de ajustes.
+el panel de control del módulo de ajustes. La cabecera muestra a la derecha el chip de la
+cuenta (avatar cuadrado con esquinas redondeadas estilo icono de iOS + nombre + punto de
+estado), el badge de conexión mientras no haya cuenta, o un botón **Iniciar sesión**
+cuando no existe ninguna sesión guardada.
 
 **Panel de control** (`/`): la pantalla clásica, con sus tres zonas:
 
@@ -210,6 +216,7 @@ steam-auto-status/
 C:\Users\Juanky\Documents\steam-auto-status\
 ├─ config.json       ← editable a mano (horario, días, opciones)
 ├─ auth.json         ← refresh token + steamID (credencial de login)
+├─ profile.json      ← cache del avatar de la cuenta (borrable sin riesgo)
 └─ logs\
    └─ status.log
 ```
@@ -330,8 +337,7 @@ Disco instalado estimado: ~60–90 MB.
 
 - Todo el trabajo nuevo se hace en la rama **`dev`**; `main` permanece estable.
 - **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
-  bloque/funcionalidad en su máquina. Los commits locales sobre `dev` sí se permiten;
-  lo que se retiene es el push al remoto.
+  bloque/funcionalidad en su máquina. Los commits locales sobre `dev` tampoco se permiten.
 - **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos
 - **Comentarios:** Documenta las partes complejas
 - **Releases:** el usuario decide la versión (major/minor/patch a su criterio) y se corta
