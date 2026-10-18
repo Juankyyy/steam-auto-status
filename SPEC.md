@@ -366,13 +366,11 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
   `assets/logo-lockup.png` y `assets/logo-lockup-dark.png` (lockup horizontal con el nombre,
   tinta oscura/clara para fondos claros/oscuros), `assets/social-preview.png` (vista previa
   del repositorio, 1280×640; se sube a mano en los ajustes de GitHub) y
-  `assets/screenshots/`: `dashboard.png`, `settings-schedule.png` y `settings-app.png`
-  (capturas recortadas a las tarjetas) y `overview.png`, la tira que usa el README —las tres
-  en fila, 360 px de alto y esquinas redondeadas, compuesta con las anteriores (no se
-  mantiene a mano).
+  `assets/screenshots/main-screenshot.jpg` (captura principal del README, 2400×1792, con su
+  fondo degradado).
 - **README**: abre con el lockup conmutado por tema con `<picture>` y
   `prefers-color-scheme` (así el nombre se lee en claro y en oscuro), el eslogan y los
-  badges; debajo va la tira de capturas (`overview.png`) a todo el ancho.
+  badges; debajo va `main-screenshot.jpg`, centrada y a todo el ancho.
 
 ## 5. Limitaciones conocidas
 

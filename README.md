@@ -9,45 +9,44 @@
 <p align="center"><strong>Online when you want. Invisible when you don't.</strong></p>
 
 <p align="center">
-  <a href="https://github.com/Juankyyy/steam-auto-status/releases/latest"><img src="https://img.shields.io/github/v/release/Juankyyy/steam-auto-status?style=flat-square&amp;label=release&amp;color=4DD4A0" alt="Latest release"></a>
-  <a href="https://github.com/Juankyyy/steam-auto-status/releases"><img src="https://img.shields.io/github/downloads/Juankyyy/steam-auto-status/total?style=flat-square&amp;label=downloads&amp;color=64C4FD" alt="Total downloads"></a>
-  <img src="https://img.shields.io/badge/platform-Windows%2010%2F11-0078D6?style=flat-square" alt="Platform: Windows 10/11">
-  <a href="https://tauri.app"><img src="https://img.shields.io/badge/built%20with-Tauri%202-24C8DB?style=flat-square" alt="Built with Tauri 2"></a>
-  <a href="https://react.dev"><img src="https://img.shields.io/badge/UI-React%20%2B%20Tailwind-61DAFB?style=flat-square" alt="UI: React + Tailwind"></a>
-  <img src="https://img.shields.io/badge/license-GPL--3.0-6C819E?style=flat-square" alt="License: GPL-3.0">
+  <a href="https://github.com/Juankyyy/steam-auto-status/releases/latest"><img src="https://shieldcn.dev/github/release/Juankyyy/steam-auto-status.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logoColor=4DD4A0" alt="Latest release"></a>
+  <a href="https://github.com/Juankyyy/steam-auto-status/releases"><img src="https://shieldcn.dev/github/downloads/Juankyyy/steam-auto-status.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logoColor=64C4FD" alt="Total downloads"></a>
+  <img src="https://shieldcn.dev/badge/platform-Windows%2010%2F11.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logo=windows&amp;logoColor=0078D6" alt="Platform: Windows 10/11">
+  <a href="https://tauri.app"><img src="https://shieldcn.dev/badge/built%20with-Tauri%202.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logo=tauri&amp;logoColor=24C8DB" alt="Built with Tauri 2"></a>
+  <a href="https://react.dev"><img src="https://shieldcn.dev/badge/UI-React%20%2B%20Tailwind.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logo=react&amp;logoColor=61DAFB" alt="UI: React + Tailwind"></a>
+  <img src="https://shieldcn.dev/badge/license-GPL%203.0.svg?variant=secondary&amp;size=xs&amp;mode=dark&amp;logo=lu:Scale&amp;logoColor=A1A1AA" alt="License: GPL-3.0">
 </p>
 
 Steam Auto Status keeps your Steam presence on your schedule: **Online** during the hours
 you choose, **Invisible** the rest of the time. It's a small Windows tray app that lives
-quietly in the background, so you don't have to remember to appear online before work — or
+quietly in the background, so you don't have to remember to appear online before work or
 to go invisible before bed.
 
 ## 📸 Screenshots
 
-<a href="assets/screenshots/overview.png"><img src="assets/screenshots/overview.png" alt="Dashboard, weekly schedule and application settings"></a>
+<p align="center">
+  <a href="assets/screenshots/main-screenshot.jpg"><img src="assets/screenshots/main-screenshot.jpg" alt="Steam Auto Status dashboard and schedule"></a>
+</p>
 
 ## ✨ Features
 
-Everything is configured from the panel; `config.json` is plain JSON if you ever prefer to
-edit it by hand.
-
-- **Schedule-driven presence** — Online inside your weekly window and Invisible outside it.
+- **Schedule-driven presence**: Online inside your weekly window and Invisible outside it.
   Pick the days and the start/end time, including overnight windows (default: Monday–Friday,
   17:30 → 01:00).
-- **Keeps working with Steam closed** — The app runs its own background session, so your
+- **Keeps working with Steam closed**: The app runs its own background session, so your
   status changes on time whether or not the client is open. It reconnects on its own after
   network drops, never launches games and never signs out the client you play with.
-- **Sign in once** — Scan a QR code with the Steam mobile app, or use username + password
+- **Sign in once**: Scan a QR code with the Steam mobile app, or use username + password
   with mobile confirmation. Only the refresh token is stored, locally.
-- **Tray-first, panel when you want it** — Current status and next change at a glance,
+- **Tray-first, panel when you want it**: Current status and next change at a glance,
   one-click overrides from the tray menu ("Online for 30 min", "Invisible now",
   pause/resume), and a settings window for schedule, startup and notifications. The tray
   icon doubles as a status light: green online, grey invisible.
-- **Light on resources** — Around 140–160 MB at idle (shell + sidecar), and the WebView
+- **Light on resources**: Around 140–160 MB at idle (shell + sidecar), and the WebView
   processes are released when you close the window. Built to stay open 24/7.
-- **Spanish and English** — Switch language at runtime; the panel, tray menu, tooltip and
+- **Spanish and English**: Switch language at runtime; the panel, tray menu, tooltip and
   notifications follow the same setting. On first run it matches your Windows language.
-- **Local by default** — Settings, token and logs live in one folder under `Documents`
+- **Local by default**: Settings, token and logs live in one folder under `Documents`
   (configurable from the panel). Nothing leaves your machine except the Steam connection.
 
 ## 🚀 Getting started
@@ -78,8 +77,8 @@ to adjust hours, weekdays, notifications or to pause the automation.
 Steam doesn't store one single status: it combines the status of every session signed in
 with your account. If any of them is Online, your friends see you Online.
 
-Steam Auto Status simply holds one more session of its own in the background — an extra,
-invisible client that never launches anything — and flips it between Online and Invisible
+Steam Auto Status simply holds one more session of its own in the background an extra,
+invisible client that never launches anything and flips it between Online and Invisible
 whenever your schedule says so.
 
 Your normal Steam client keeps whatever status you set (Invisible works great as a
@@ -90,7 +89,7 @@ sessions.
 ## 🔐 Your data
 
 - Everything is stored **locally** in `Documents\steam-auto-status\` (config, login token,
-  logs) — not in AppData. The folder is configurable from the settings panel.
+  logs) not in AppData. The folder is configurable from the settings panel.
 - Nothing is sent anywhere except Steam itself.
 - Uninstalling **keeps your data**; delete the folder manually if you want a clean slate.
 
@@ -101,14 +100,14 @@ sessions.
 
 Check three things:
 
-1. **The app is running** — look for the tray icon.
-2. **The schedule covers the current time** — panel → Schedule (overnight windows included).
-3. **Your normal Steam client is set to Invisible** — the app only *adds* Online presence
+1. **The app is running**: look for the tray icon.
+2. **The schedule covers the current time**: panel → Schedule (overnight windows included).
+3. **Your normal Steam client is set to Invisible**: the app only *adds* Online presence
    during your window; it can't force Invisible while another session (your desktop client,
    the mobile app, a game) is Online.
 
 To see the result, check your status on your
-[Steam profile page](https://steamcommunity.com/my/) — the Friends & chat tab can show a
+[Steam profile page](https://steamcommunity.com/my/): the Friends & chat tab can show a
 stale or blank status after a reconnect. Live logs are in
 `Documents\steam-auto-status\logs\`.
 
@@ -128,11 +127,11 @@ lines) and [open an issue](https://github.com/Juankyyy/steam-auto-status/issues)
 
 Steam's own client reloads (and can leave blank) the friends list whenever your account
 receives a new session, and the app's 24/7 session counts as one. It is a Steam client
-quirk — your client is never logged out, and the app keeps its logons to the bare minimum
+quirk your client is never logged out, and the app keeps its logons to the bare minimum
 (one per start, plus retries with backoff after network drops).
 
 If the list looks empty: switch your status to Invisible and back to Online (this often
-refreshes it), or restart the Steam client — closing and reopening the friends tab does not
+refreshes it), or restart the Steam client closing and reopening the friends tab does not
 fix it. The web chat recovers with a page refresh, and the list also repopulates on its own
 over time. Tip: enable **Start with Windows** so the app connects before you open Steam and
 you won't normally see this.
@@ -216,7 +215,7 @@ Requirements: Node.js 22 or newer and Rust (rustup) + MSVC Build Tools.
 The build downloads the official Node runtime used by the sidecar (SHA256-verified) and
 renames the installer to `steam-auto-status_X.Y.Z_x64-setup.exe`.
 
-**Releases:** push a `vX.Y.Z` tag from `main` — GitHub Actions builds everything on Windows
+**Releases:** push a `vX.Y.Z` tag from `main` - GitHub Actions builds everything on Windows
 and publishes the release with the installer attached. Curated notes live in
 [`release-notes/`](release-notes/) (English, with emojis).
 
