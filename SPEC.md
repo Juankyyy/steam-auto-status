@@ -333,13 +333,15 @@ Disco instalado estimado: ~60–90 MB.
 - GitHub CLI (`gh`) para la gestión del repositorio
 - Repositorio remoto: `steam-auto-status` (rama `main`); los datos de la app viven en
   `Documents` y **nunca** en el repo (`.gitignore` excluye datos y token)
-- Pendiente de instalar para desarrollo: rustup + MSVC Build Tools, Tauri CLI
+- Toolchain de desarrollo instalada: rustup + MSVC Build Tools (ya operativos); la Tauri
+  CLI llega con la devDependency `@tauri-apps/cli` (`npm run tauri`)
 
 ## 9. Flujo de trabajo (acordado con el usuario)
 
 - Todo el trabajo nuevo se hace en la rama **`dev`**; `main` permanece estable.
 - **No se hace push a `dev` ni merge a `main` hasta que el usuario verifique** el
-  bloque/funcionalidad en su máquina. Los commits locales sobre `dev` tampoco se permiten.
+  bloque/funcionalidad en su máquina. Los commits locales exigen aviso previo: el agente
+  propone el mensaje y espera el OK del usuario antes de commitear.
 - **Paso a paso:** No generes toda la app de golpe. Espera a que el usuario pida módulos específicos
 - **Comentarios:** Documenta las partes complejas
 - **Releases:** el usuario decide la versión (major/minor/patch a su criterio) y se corta
