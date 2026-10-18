@@ -78,6 +78,16 @@ schedule. Live logs are in `Documents\steam-auto-status\logs\`.
 it again. If it persists, check `logs\sidecar-stderr.log` and
 [open an issue](https://github.com/Juankyyy/steam-auto-status/issues).
 
+**Steam's friends list looks empty after the app (re)connects** — Steam's own client reloads
+(and can leave blank) the friends list whenever your account receives a new session, and the
+app's 24/7 session counts as one. It is a Steam client quirk — your client is never logged
+out, and the app keeps its logons to the bare minimum (one per start, plus retries with
+backoff after network drops). If the list looks empty: switch your status to Invisible and
+back to Online (this often refreshes it), or restart the Steam client — closing and reopening
+the friends tab does not fix it. The web chat recovers with a page refresh, and the list also
+repopulates on its own over time. Tip: enable **Start with Windows** so the app connects
+before you open Steam and you won't normally see this.
+
 **How do I switch Steam accounts?** — Panel → **Log out**, then sign in again.
 
 **How do I close it completely?** — Tray icon → **Quit**. If "Start with Windows" is

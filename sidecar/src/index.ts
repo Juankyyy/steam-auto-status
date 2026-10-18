@@ -11,6 +11,8 @@
 import SteamUser from 'steam-user';
 import { EAuthSessionGuardType, EAuthTokenPlatformType, LoginSession } from 'steam-session';
 import QRCode from 'qrcode';
+import { execFile } from 'node:child_process';
+import { randomBytes } from 'node:crypto';
 import * as fs from 'node:fs';
 import * as path from 'node:path';
 import * as readline from 'node:readline';
@@ -201,6 +203,118 @@ function clearAuth() {
   }
 }
 
+// ---------------------------------------------------------------- token renewal (scheduled)
+
+// steam-user can renew the refresh token right after every logon (`renewRefreshTokens`), but
+// that put a token/web request inside every (re)connection — and Steam denied every attempt
+// made in quick succession anyway. Renewal is handled here instead, decoupled from the logon:
+// a background check (never while a logon is in progress) that prefers moments when the
+// official Steam client is closed, so nothing in it can be disturbed by the request.
+
+const TOKEN_RENEW_AFTER_MS = 45 * 86_400_000; // renew refresh tokens older than 45 days
+const TOKEN_RENEW_BEFORE_EXPIRY_MS = 60 * 86_400_000; // or expiring within 60 days
+const RENEWAL_RECHECK_MS = 6 * 3_600_000; // space out failed/deferred renewal attempts
+const RENEWAL_DEFER_MAX_MS = 7 * 86_400_000; // don't wait for Steam to close forever
+
+let lastRenewalTry = 0;
+let renewalRunning = false;
+let renewalDeferredSince: number | null = null;
+
+/** Does the saved refresh token look old enough (or close enough to expiry) to renew? */
+function tokenNeedsRenewal(token: string): boolean {
+  try {
+    const payload = JSON.parse(
+      Buffer.from(token.split('.')[1] ?? '', 'base64url').toString('utf8'),
+    ) as { iat?: number; exp?: number };
+    if (!payload.iat || !payload.exp) return false;
+    const now = Date.now();
+    return (
+      now - payload.iat * 1000 > TOKEN_RENEW_AFTER_MS ||
+      payload.exp * 1000 - now < TOKEN_RENEW_BEFORE_EXPIRY_MS
+    );
+  } catch {
+    return false;
+  }
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('timeout')), ms);
+    promise.then(
+      (value) => {
+        clearTimeout(timer);
+        resolve(value);
+      },
+      (err) => {
+        clearTimeout(timer);
+        reject(err);
+      },
+    );
+  });
+}
+
+/** Is the official Steam client running on this machine? (renewal is deferred until it isn't) */
+function steamClientRunning(): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (process.platform !== 'win32') {
+      resolve(false);
+      return;
+    }
+    execFile(
+      'tasklist',
+      ['/FI', 'IMAGENAME eq steam.exe', '/NH'],
+      { windowsHide: true, timeout: 5_000 },
+      (err, stdout) => resolve(!err && /steam\.exe/i.test(stdout)),
+    );
+  });
+}
+
+/** Renews the saved refresh token when it is old enough (or close to expiry). */
+async function renewTokenIfNeeded(): Promise<void> {
+  if (renewalRunning || loggingIn || !auth?.refreshToken) return;
+  const current = auth.refreshToken;
+  if (!tokenNeedsRenewal(current)) return;
+  const now = Date.now();
+  if (now - lastRenewalTry < RENEWAL_RECHECK_MS) return;
+  if (await steamClientRunning()) {
+    if (!renewalDeferredSince) renewalDeferredSince = now;
+    if (now - renewalDeferredSince < RENEWAL_DEFER_MAX_MS) {
+      lastRenewalTry = now;
+      log('Renovación de token aplazada: el cliente de Steam está abierto');
+      return;
+    }
+    log('Renovación de token aplazada demasiado tiempo; se intenta con Steam abierto');
+  }
+  renewalRunning = true;
+  lastRenewalTry = now;
+  try {
+    const session = new LoginSession(EAuthTokenPlatformType.SteamClient, {
+      machineId: true,
+      machineFriendlyName: cfg.machineName,
+    });
+    // Failures surface through the promise; the listener just avoids an unhandled 'error'.
+    session.on('error', () => {});
+    session.refreshToken = current;
+    const renewed = await withTimeout(session.renewRefreshToken(), 30_000);
+    if (!auth || auth.refreshToken !== current) {
+      log('Renovación completada tras un cierre de sesión; se descarta');
+      return;
+    }
+    if (renewed) {
+      saveAuth({ refreshToken: session.refreshToken, steamID: auth.steamID });
+      renewalDeferredSince = null;
+      log('Token de sesión renovado (programado)');
+    } else {
+      log('Steam no emitió un token nuevo; se reintentará más adelante');
+    }
+    pushState();
+  } catch (e) {
+    log(`No se pudo renovar el token: ${e instanceof Error ? e.message : String(e)}`);
+  } finally {
+    renewalRunning = false;
+  }
+}
+
 // ---------------------------------------------------------------- profile (avatar cache)
 
 interface ProfileFile {
@@ -357,6 +471,19 @@ let credsSession: LoginSession | null = null;
 let ssGuard: { domain: string | null; lastCodeWrong: boolean } | null = null;
 let qrDataUrl: string | null = null;
 
+// Timers and bookkeeping for connection recovery (see start() and armWatchdog()).
+let logonWatchdog: NodeJS.Timeout | null = null;
+let retryTimer: NodeJS.Timeout | null = null;
+let lastStartAt = 0;
+let failedLogonAttempts = 0;
+
+const LOGON_WATCHDOG_MS = 45_000; // no logon response within this time → restart the attempt
+const RECONNECT_WATCHDOG_MS = 180_000; // auto-relogin stuck for this long → restart the attempt
+const START_DEBOUNCE_MS = 15_000; // minimum gap between token logon attempts
+const RETRY_BASE_MS = 5_000;
+const RETRY_MAX_MS = 300_000;
+const RATE_LIMIT_RETRY_MS = 600_000; // Steam asked us to slow down
+
 function eresultName(v: unknown): string {
   const n = Number(v);
   const map = SteamUser.EResult as unknown as Record<number, string>;
@@ -429,9 +556,28 @@ function pushState() {
 // ---------------------------------------------------------------- Steam client
 
 function newClient(): SteamUser {
-  const u = new SteamUser({ autoRelogin: true, renewRefreshTokens: true, dataDirectory: steamDataDir });
+  // `renewRefreshTokens` stays off on purpose: it made every (re)logon ask Steam for a new
+  // token (and Steam denied all of those rapid attempts anyway). Renewal now runs on its own
+  // schedule (renewTokenIfNeeded) so a logon stays a clean, minimal logon.
+  const u = new SteamUser({ autoRelogin: true, renewRefreshTokens: false, dataDirectory: steamDataDir });
+
+  // steam-user bootstraps a steamcommunity web session after every logon; this app never
+  // uses web cookies, so skipping it keeps another token request out of each (re)logon.
+  u.webLogOn = () => {};
+
+  u.on('debug', (msg: unknown) => {
+    if (typeof msg !== 'string') return;
+    // Keep only the lines that help diagnose connection issues (logon responses, reconnects,
+    // renewals…); the rest of the debug chatter would flood the log. Never log token data.
+    if (!/logon|reconnect|disconnect|renew|connection/i.test(msg)) return;
+    if (/refresh_token|access_token|eyJ/i.test(msg)) return;
+    log(`debug: ${msg.slice(0, 200)}`);
+  });
 
   u.on('loggedOn', () => {
+    if (user !== u) return;
+    clearLogonWatchdog();
+    failedLogonAttempts = 0;
     steamConnected = true;
     loggingIn = false;
     loginPhase = 'idle';
@@ -445,11 +591,13 @@ function newClient(): SteamUser {
   });
 
   u.on('accountInfo', (name: string) => {
+    if (user !== u) return;
     if (name) log(`Cuenta: ${name}`);
     pushState();
   });
 
   u.on('refreshToken', (token: string) => {
+    if (user !== u) return;
     const steamID = u.steamID ? u.steamID.toString() : auth?.steamID;
     saveAuth({ refreshToken: token, steamID });
     log('Token de sesión guardado/actualizado');
@@ -457,6 +605,8 @@ function newClient(): SteamUser {
   });
 
   u.on('steamGuard', (domain: string | null, callback: (code: string) => void, lastCodeWrong: boolean) => {
+    if (user !== u) return;
+    clearLogonWatchdog();
     loggingIn = false;
     loginPhase = 'awaiting_guard';
     guard = { domain: domain ?? null, callback, wrong: !!lastCodeWrong };
@@ -466,6 +616,8 @@ function newClient(): SteamUser {
   });
 
   u.on('error', (e: Error & { eresult?: number }) => {
+    if (user !== u) return;
+    clearLogonWatchdog();
     loggingIn = false;
     steamConnected = false;
     guard = null;
@@ -482,22 +634,93 @@ function newClient(): SteamUser {
       SteamUser.EResult.AccessDenied,
       SteamUser.EResult.LogonSessionReplaced,
     ].includes(e.eresult ?? -1);
-    if (needLogin) emit('authRequired', { kind: 'login', reason: lastError.message });
+    if (needLogin) {
+      emit('authRequired', { kind: 'login', reason: lastError.message });
+      return;
+    }
+    // Transient failure (network, throttling…): retry with backoff instead of staying down.
+    failedLogonAttempts++;
+    scheduleRetry(e.eresult === SteamUser.EResult.RateLimitExceeded ? RATE_LIMIT_RETRY_MS : undefined);
   });
 
   u.on('disconnected', (eresult: number, msg?: string) => {
+    if (user !== u) return;
     steamConnected = false;
     log(`Desconectado de Steam (${eresultName(eresult)}${msg ? `: ${msg}` : ''})`);
     pushState();
+    // steam-user's autoRelogin retries by itself; the watchdog is only a backstop for the
+    // case where that recovery gets stuck (observed in the wild as a silent "Conectando…").
+    if (!loggingIn) armWatchdog(u, 'reconexión automática', RECONNECT_WATCHDOG_MS);
   });
 
   return u;
 }
 
-/** Starts/retries the connection with the saved token (or requests login) */
-function start() {
+/** Clears the pending logon/reconnect watchdog timer, if any. */
+function clearLogonWatchdog() {
+  if (logonWatchdog) {
+    clearTimeout(logonWatchdog);
+    logonWatchdog = null;
+  }
+}
+
+/**
+ * Watches a client that should come up but may never report back (Steam sometimes never
+ * answers the logon message; steam-user then retries silently and the app shows
+ * "Conectando…" forever). If `u` is still the current client and never connects within
+ * `ms`, it is torn down and a fresh attempt is scheduled.
+ */
+function armWatchdog(u: SteamUser, why: string, ms: number) {
+  clearLogonWatchdog();
+  logonWatchdog = setTimeout(() => {
+    logonWatchdog = null;
+    if (user !== u || steamConnected) return;
+    log(`Steam no respondió (${why}); reinicio la conexión`);
+    loggingIn = false;
+    loginPhase = 'idle';
+    lastError = { message: 'Tiempo de espera agotado al conectar con Steam' };
+    try {
+      u.logOff();
+    } catch {
+      /* ignore */
+    }
+    if (user === u) user = null;
+    pushState();
+    failedLogonAttempts++;
+    scheduleRetry();
+  }, ms);
+}
+
+/** Schedules a new logon attempt with exponential backoff (cap ~5 min). */
+function scheduleRetry(overrideMs?: number) {
+  if (retryTimer || steamConnected) return;
+  const delay = overrideMs ?? Math.min(RETRY_MAX_MS, RETRY_BASE_MS * 2 ** Math.min(failedLogonAttempts, 6));
+  log(`Reintento de conexión en ${Math.round(delay / 1000)} s`);
+  retryTimer = setTimeout(() => {
+    retryTimer = null;
+    start(true);
+  }, delay);
+}
+
+/**
+ * Random 32-bit logonID. Sessions with different logonIDs don't kick each other, while
+ * steam-user's default (0) is shared by every session — with it, two app instances would
+ * expel one another and each expulsion would trigger another logon.
+ */
+function randomLogonID(): number {
+  const v = randomBytes(4).readUInt32BE(0);
+  return v === 0 ? 1 : v;
+}
+
+/** Starts/retries the connection with the saved token (or requests login). */
+function start(force = false) {
   if (steamConnected) {
     log('Ya hay una sesión conectada');
+    pushState();
+    return;
+  }
+  if (!force && (loggingIn || Date.now() - lastStartAt < START_DEBOUNCE_MS)) {
+    log('Se ignora el intento: ya hay un inicio de sesión en curso o el último fue hace un momento');
     pushState();
     return;
   }
@@ -507,6 +730,10 @@ function start() {
     pushState();
     return;
   }
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
   if (user) {
     try {
       user.logOff();
@@ -514,12 +741,14 @@ function start() {
       /* ignore */
     }
   }
+  lastStartAt = Date.now();
   loggingIn = true;
   loginPhase = 'connecting';
   lastError = null;
   user = newClient();
   log('Iniciando sesión con token guardado…');
-  user.logOn({ refreshToken: auth.refreshToken, machineName: cfg.machineName });
+  user.logOn({ refreshToken: auth.refreshToken, machineName: cfg.machineName, logonID: randomLogonID() });
+  armWatchdog(user, 'inicio de sesión', LOGON_WATCHDOG_MS);
   pushState();
 }
 
@@ -551,6 +780,12 @@ function doLogin(params: Record<string, unknown>) {
 }
 
 function doLogout() {
+  clearLogonWatchdog();
+  if (retryTimer) {
+    clearTimeout(retryTimer);
+    retryTimer = null;
+  }
+  failedLogonAttempts = 0;
   try {
     user?.logOff();
   } catch {
@@ -647,7 +882,7 @@ function finishLogin(session: LoginSession, method: 'qr' | 'creds') {
     }
     user = null;
   }
-  start();
+  start(true);
 }
 
 function onLoginSessionError(session: LoginSession, e: Error & { eresult?: number }) {
@@ -927,6 +1162,7 @@ setInterval(() => {
   }
   applyPersona();
   pushState();
+  void renewTokenIfNeeded();
 }, 30_000);
 
 const rl = readline.createInterface({ input: process.stdin });
@@ -945,6 +1181,8 @@ function shutdown(reason: string) {
   if (shuttingDown) return;
   shuttingDown = true;
   log(`Cerrando (${reason})`);
+  clearLogonWatchdog();
+  if (retryTimer) clearTimeout(retryTimer);
   cancelLoginSessions();
   try {
     user?.logOff();

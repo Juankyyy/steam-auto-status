@@ -357,11 +357,16 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
    no interactuar con juegos/comunidad. Decisión y responsabilidad del usuario.
 6. Primer login requiere el código 2FA una vez. Si el token caduca (p. ej. PC apagado
    >200 días), la app pedirá login otra vez (lo indicará en la UI y el log).
-7. **El cliente oficial de Steam puede recargar (o dejar vacía) su lista de amigos** cada vez
+7. **El cliente oficial de Steam puede recargar (y dejar vacía) su lista de amigos** cada vez
    que la cuenta recibe una sesión nueva —comportamiento del propio cliente, verificado en
-   sus logs, ajeno a esta app—. La app mantiene el paquete de logon mínimo y minimiza las
-   (re)conexiones para que ocurra lo menos posible; si la lista quedara vacía, se recupera
-   reabriendo el panel de amigos, alternando el estado o reiniciando el cliente.
+   sus logs y con varias variantes de logon descartadas (renovación de token, sesión web,
+   `chat_mode`, `client_os_type`, `logonID`, peticiones de notificaciones…): cualquier
+   conexión de la app lo dispara y no es evitable desde la app—. También reinicia el estado
+   del chat web de la cuenta. La app mantiene el paquete de logon mínimo y minimiza las
+   (re)conexiones; recomendación de uso: **Iniciar con Windows**, para conectar antes de
+   abrir Steam. Si la lista queda vacía: alternar Invisible/Conectado o reiniciar el cliente
+   (cerrar y reabrir la pestaña de amigos no basta); la web se recupera con F5; con el tiempo
+   también se repuebla sola.
 
 ## 7. Cómo verificar que funciona
 
