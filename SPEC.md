@@ -316,3 +316,7 @@ Disco instalado estimado: ~60–90 MB.
   la versión. Notas de la release: si existe `release-notes/vX.Y.Z.md` se usa tal cual;
   si no, el workflow las autogenera desde los commits convencionales (`feat:`, `fix:`…)
   desde el tag anterior.
+- **Idioma**: todo en **inglés** — código (incluidos comentarios), commits y release notes.
+- **Estilo de las release notes**: en inglés, **con emojis** y formato amigable
+  (highlights + instalación + requisitos). El cuerpo publicado en GitHub debe ser igual a
+  `release-notes/vX.Y.Z.md`.
