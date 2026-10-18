@@ -7,7 +7,7 @@ import { cmd, setAutostart, type AppState } from '@/lib/tauri'
 export function AppSettings({ state }: { state: AppState | null }) {
   const cfg = state?.config
 
-  const setFlag = (key: 'startWithWindows' | 'notifications') => (checked: boolean) => {
+  const setFlag = (key: 'startWithWindows' | 'notifications' | 'devMode') => (checked: boolean) => {
     if (key === 'startWithWindows') void setAutostart(checked)
     void cmd('setConfig', { [key]: checked })
   }
@@ -16,7 +16,7 @@ export function AppSettings({ state }: { state: AppState | null }) {
     <Card>
       <CardHeader>
         <CardTitle>Aplicación</CardTitle>
-        <CardDescription>Arranque con Windows y avisos.</CardDescription>
+        <CardDescription>Arranque con Windows, avisos y herramientas internas.</CardDescription>
       </CardHeader>
       <CardContent className="grid gap-3">
         <div className="flex items-center justify-between gap-4">
@@ -42,6 +42,21 @@ export function AppSettings({ state }: { state: AppState | null }) {
             checked={cfg?.notifications ?? false}
             disabled={!cfg}
             onCheckedChange={setFlag('notifications')}
+          />
+        </div>
+
+        <div className="flex items-center justify-between gap-4">
+          <div>
+            <Label htmlFor="devmode">Modo desarrollador</Label>
+            <p className="text-xs text-muted-foreground">
+              Muestra una pestaña extra con herramientas internas (forzar estados, registro en vivo).
+            </p>
+          </div>
+          <Switch
+            id="devmode"
+            checked={cfg?.devMode ?? false}
+            disabled={!cfg}
+            onCheckedChange={setFlag('devMode')}
           />
         </div>
       </CardContent>

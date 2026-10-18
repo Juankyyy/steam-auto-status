@@ -32,6 +32,7 @@ interface Config {
   startWithWindows: boolean;
   notifications: boolean;
   machineName: string;
+  devMode: boolean;
 }
 
 interface AuthFile {
@@ -47,6 +48,7 @@ const DEFAULT_CONFIG: Config = {
   startWithWindows: false,
   notifications: false,
   machineName: 'AutoStatus',
+  devMode: false,
 };
 
 // ---------------------------------------------------------------- arguments and paths
@@ -140,6 +142,7 @@ function sanitizeConfig(raw: Record<string, unknown>): Config {
     startWithWindows: !!raw.startWithWindows,
     notifications: !!raw.notifications,
     machineName,
+    devMode: !!raw.devMode,
   };
 }
 

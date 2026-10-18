@@ -1,4 +1,4 @@
-import { LayoutDashboard, LogIn, Settings } from 'lucide-react'
+import { LayoutDashboard, LogIn, Settings, Terminal } from 'lucide-react'
 import { Link, NavLink, Outlet } from 'react-router'
 import logoUrl from '@/assets/logo.svg'
 import { AccountChip } from '@/components/AccountChip'
@@ -13,6 +13,9 @@ const NAV_ITEMS = [
   { to: '/', label: 'Panel de control', icon: LayoutDashboard, end: true },
   { to: '/settings', label: 'Ajustes', icon: Settings, end: false },
 ]
+
+/** Extra tab, only listed while developer mode is enabled in settings. */
+const DEV_NAV_ITEM = { to: '/dev', label: 'Desarrollador', icon: Terminal, end: false }
 
 function connectionBadge(state: AppState | null) {
   if (!state) return <Badge variant="outline">Cargando…</Badge>
@@ -59,6 +62,7 @@ function accountArea(state: AppState | null) {
 /** Application shell: header (brand, module navigation, Steam status) + routed module. */
 export function Layout() {
   const { state } = useAppContext()
+  const navItems = state?.config.devMode ? [...NAV_ITEMS, DEV_NAV_ITEM] : NAV_ITEMS
 
   return (
     <div className="flex min-h-screen flex-col bg-background text-foreground">
@@ -72,7 +76,7 @@ export function Layout() {
         </div>
 
         <nav aria-label="Módulos" className="flex items-center gap-0.5 rounded-lg bg-muted p-0.5">
-          {NAV_ITEMS.map(({ to, label, icon: Icon, end }) => (
+          {navItems.map(({ to, label, icon: Icon, end }) => (
             <NavLink
               key={to}
               to={to}

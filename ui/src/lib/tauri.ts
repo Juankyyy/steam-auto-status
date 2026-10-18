@@ -20,6 +20,7 @@ export interface Config {
   startWithWindows: boolean
   notifications: boolean
   machineName: string
+  devMode: boolean
 }
 
 export interface AppState {

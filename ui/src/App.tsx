@@ -5,6 +5,7 @@ import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppContext, type AppContextValue } from '@/lib/app-context'
 import { cmd, getCachedState, isHiddenLaunch, isTauri, onSidecarMessage, showMainWindow, type AppState } from '@/lib/tauri'
 import { Dashboard } from '@/pages/Dashboard'
+import { Dev } from '@/pages/Dev'
 import { Settings } from '@/pages/Settings'
 
 export default function App() {
@@ -84,6 +85,7 @@ export default function App() {
             <Route element={<Layout />}>
               <Route index element={<Dashboard />} />
               <Route path="settings" element={<Settings />} />
+              <Route path="dev" element={<Dev />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Route>
           </Routes>

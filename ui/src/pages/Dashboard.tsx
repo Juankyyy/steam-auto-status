@@ -1,12 +1,11 @@
 import { LoginPanel } from '@/components/LoginPanel'
 import { ScheduleCard } from '@/components/ScheduleCard'
 import { StatusPanel } from '@/components/StatusPanel'
-import { TestsPanel } from '@/components/TestsPanel'
 import { useAppContext } from '@/lib/app-context'
 
-/** Dashboard module: status, first-time login, configuration and quick tests. */
+/** Dashboard module: status, first-time login and schedule summary. */
 export function Dashboard() {
-  const { state, logs, needLogin, loginReason } = useAppContext()
+  const { state, needLogin, loginReason } = useAppContext()
 
   const showLogin =
     !!state && state.connection !== 'connected' && (!state.authPresent || !!state.guardNeeded || needLogin)
@@ -25,10 +24,7 @@ export function Dashboard() {
         />
       )}
 
-      <div className="grid items-start gap-6 xl:grid-cols-2">
-        <ScheduleCard state={state} />
-        <TestsPanel state={state} logs={logs} />
-      </div>
+      <ScheduleCard state={state} />
     </div>
   )
 }

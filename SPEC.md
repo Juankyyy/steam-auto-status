@@ -177,15 +177,13 @@ cuando no existe ninguna sesión guardada. Junto al nombre de la app hay un badg
 versión (`vX.Y.Z`, inyectada en tiempo de build desde `tauri.conf.json`; es la misma
 fuente que usa «Acerca de»).
 
-**Panel de control** (`/`): la pantalla clásica, con sus tres zonas:
+**Panel de control** (`/`): estado, resumen del horario y primer login:
 
 1. **Estado**: "Conectado (dentro de ventana)" / "Invisible" + cuenta atrás a la próxima
    transición ("Online en 2 h 14 min" / "Invisible a la 01:00").
 2. **Programación**: resumen del horario, interruptor rápido activar/pausar y enlace
    "Editar en Ajustes".
-3. **Pruebas + log**: forzar Conectado / Invisible durante X minutos; log en vivo; estado de
-   conexión con Steam (conectado/reintentando).
-4. **Primer login** (visible cuando el sidecar emite `authRequired`):
+3. **Primer login** (visible cuando el sidecar emite `authRequired`):
    - **Pestaña "Código QR"** (por defecto): el sidecar abre una sesión QR con
      `steam-session` (`EAuthTokenPlatformType.SteamClient`), genera la imagen con `qrcode`
      y la expone en el estado (`qrDataUrl`). Fases: `awaiting_qr` → (escaneo)
@@ -203,7 +201,7 @@ tarjetas:
   duración) y botón para restaurar los valores por defecto.
 - **Cuenta de Steam**: cuenta conectada (nombre + SteamID), botón Reconectar, nombre de
   máquina (`machineName`) y cerrar sesión (borra el token).
-- **Aplicación**: iniciar con Windows y notificaciones.
+- **Aplicación**: iniciar con Windows, notificaciones y modo desarrollador.
 - **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, vaciar
   `status.log` y copiar un diagnóstico (versión, estado y últimas líneas del registro)
   para reportar problemas.
@@ -211,6 +209,12 @@ tarjetas:
 
 Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
 conserva el resumen del horario y la pausa rápida.
+
+**Desarrollador** (`/dev`): herramientas internas que no deben aparecer para el usuario
+final (forzar Conectado/Invisible y visor del registro en vivo). La pestaña solo aparece
+en la navegación — y la ruta solo es accesible — con el **modo desarrollador** activado en
+Ajustes › Aplicación (`devMode` en `config.json`, por defecto `false`); con el modo
+apagado, entrar en `/dev` redirige al panel.
 
 Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
 `emit` al webview.
@@ -267,7 +271,8 @@ Ejemplo de `config.json`:
   "paused": false,
   "startWithWindows": false,
   "notifications": false,
-  "machineName": "AutoStatus"
+  "machineName": "AutoStatus",
+  "devMode": false
 }
 ```
 
