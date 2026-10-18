@@ -91,10 +91,6 @@ export function Layout() {
       <main className="flex-1 p-6">
         <Outlet />
       </main>
-
-      <footer className="px-6 pb-5 text-xs text-muted-foreground">
-        Datos en <span className="font-mono">{state?.dataDir ?? '—'}</span>
-      </footer>
     </div>
   )
 }
