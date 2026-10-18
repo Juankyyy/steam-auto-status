@@ -77,8 +77,8 @@ to adjust hours, weekdays, notifications or to pause the automation.
 Steam doesn't store one single status: it combines the status of every session signed in
 with your account. If any of them is Online, your friends see you Online.
 
-Steam Auto Status simply holds one more session of its own in the background an extra,
-invisible client that never launches anything and flips it between Online and Invisible
+Steam Auto Status simply holds one more session of its own in the background: an extra,
+invisible client that never launches anything and flips between Online and Invisible
 whenever your schedule says so.
 
 Your normal Steam client keeps whatever status you set (Invisible works great as a
@@ -89,7 +89,7 @@ sessions.
 ## 🔐 Your data
 
 - Everything is stored **locally** in `Documents\steam-auto-status\` (config, login token,
-  logs) not in AppData. The folder is configurable from the settings panel.
+  logs), never in AppData. The folder is configurable from the settings panel.
 - Nothing is sent anywhere except Steam itself.
 - Uninstalling **keeps your data**; delete the folder manually if you want a clean slate.
 
@@ -127,11 +127,11 @@ lines) and [open an issue](https://github.com/Juankyyy/steam-auto-status/issues)
 
 Steam's own client reloads (and can leave blank) the friends list whenever your account
 receives a new session, and the app's 24/7 session counts as one. It is a Steam client
-quirk your client is never logged out, and the app keeps its logons to the bare minimum
+quirk: your client is never logged out, and the app keeps its logons to the bare minimum
 (one per start, plus retries with backoff after network drops).
 
 If the list looks empty: switch your status to Invisible and back to Online (this often
-refreshes it), or restart the Steam client closing and reopening the friends tab does not
+refreshes it), or restart the Steam client. Closing and reopening the friends tab does not
 fix it. The web chat recovers with a page refresh, and the list also repopulates on its own
 over time. Tip: enable **Start with Windows** so the app connects before you open Steam and
 you won't normally see this.
@@ -215,9 +215,9 @@ Requirements: Node.js 22 or newer and Rust (rustup) + MSVC Build Tools.
 The build downloads the official Node runtime used by the sidecar (SHA256-verified) and
 renames the installer to `steam-auto-status_X.Y.Z_x64-setup.exe`.
 
-**Releases:** push a `vX.Y.Z` tag from `main` - GitHub Actions builds everything on Windows
+**Releases:** push a `vX.Y.Z` tag from `main`. GitHub Actions builds everything on Windows
 and publishes the release with the installer attached. Curated notes live in
-[`release-notes/`](release-notes/) (English, with emojis).
+[`release-notes/`](release-notes/) (English, with emoji section titles).
 
 Design decisions and internals are documented in [SPEC.md](SPEC.md) (Spanish), and
 [AGENTS.md](AGENTS.md) covers the working conventions.
