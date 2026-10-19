@@ -37,12 +37,6 @@ jobs:
         with:
           workspaces: src-tauri
 
-      - name: Bundled Node runtime cache
-        uses: actions/cache@v4
-        with:
-          path: src-tauri/runtime
-          key: node-runtime-v24.12.0-win-x64
-
       - name: Install dependencies
         run: npm ci
 
@@ -53,7 +47,7 @@ jobs:
           $version = $env:GITHUB_REF_NAME -replace '^v', ''
           node scripts/set-version.mjs $version
 
-      - name: Build (sidecar + runtime + app + installer)
+      - name: Build (UI + Rust app + installer)
         run: npm run build
 
       - name: Locate installer

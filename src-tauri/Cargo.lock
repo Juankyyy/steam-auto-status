@@ -3540,6 +3540,7 @@ checksum = "ff7589a1859b09232522bb9edf076ca7fcf14ded96685d3fa629db73023ffbb7"
 name = "steam-auto-status"
 version = "0.2.2"
 dependencies = [
+ "chrono",
  "serde",
  "serde_json",
  "tauri",
@@ -3549,6 +3550,7 @@ dependencies = [
  "tauri-plugin-notification",
  "tauri-plugin-opener",
  "tauri-plugin-single-instance",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -30,14 +30,6 @@
     "active": true,
     "targets": ["nsis"],
     "icon": ["icons/32x32.png", "icons/128x128.png", "icons/icon.ico"],
-    "resources": {
-      "../sidecar/dist/sidecar.cjs": "sidecar/sidecar.cjs",
-      "../sidecar/dist/system.pem": "sidecar/system.pem",
-      "../node_modules/lzma/index.js": "sidecar/node_modules/lzma/index.js",
-      "../node_modules/lzma/package.json": "sidecar/node_modules/lzma/package.json",
-      "../node_modules/lzma/src/lzma_worker.js": "sidecar/node_modules/lzma/src/lzma_worker.js",
-      "runtime/node.exe": "runtime/node.exe"
-    },
     "windows": {
       "nsis": {
         "installMode": "currentUser",

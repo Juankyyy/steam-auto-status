@@ -3,15 +3,12 @@
   "private": true,
   "version": "0.1.0",
   "workspaces": [
-    "ui",
-    "sidecar"
+    "ui"
   ],
   "scripts": {
-    "dev": "npm run build:sidecar && npm run fetch:runtime && tauri dev",
-    "build": "npm run build:sidecar && npm run fetch:runtime && tauri build && npm run rename:installer",
-    "build:sidecar": "npm run build --workspace sidecar",
+    "dev": "tauri dev",
+    "build": "tauri build && npm run rename:installer",
     "build:ui": "npm run build --workspace ui",
-    "fetch:runtime": "node scripts/fetch-node-runtime.mjs",
     "rename:installer": "node scripts/rename-installer.mjs",
     "set:version": "node scripts/set-version.mjs",
     "tauri": "tauri"

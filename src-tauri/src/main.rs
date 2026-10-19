@@ -6,40 +6,35 @@
 //! - System tray icon with context menu and dynamic tooltip.
 //! - Panel window (WebView2), created on demand and destroyed on close
 //!   to free resources (the app lives in the tray).
-//! - Node sidecar supervision (startup, restart with backoff, stdio IPC).
+//! - Bridge between the panel and the Rust core (schedule, logs, Steam client control).
 //! - Plugins: single instance, autostart, notifications, opener, clipboard.
+//!
+//! The core lives in `src-tauri/src/core.rs`; there is no Node sidecar anymore.
 
-use std::collections::VecDeque;
-use std::io::{BufRead, BufReader, Write};
-use std::process::{Child, ChildStdin, Command, Stdio};
-use std::sync::atomic::{AtomicBool, Ordering};
+mod config;
+mod core;
+mod logging;
+mod schedule;
+mod steam;
+
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use serde_json::{json, Value};
 use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent};
+use tauri::{
+    AppHandle, Listener, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+};
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
 use tauri_plugin_notification::NotificationExt;
 use tauri_plugin_opener::OpenerExt;
 
-static QUITTING: AtomicBool = AtomicBool::new(false);
-static CMD_SEQ: std::sync::atomic::AtomicU64 = std::sync::atomic::AtomicU64::new(1);
+use core::Core;
 
-/// State shared between threads (sidecar reader, commands, tray).
-#[derive(Default)]
-struct Shared {
-    state: Mutex<Option<Value>>,
-    logs: Mutex<VecDeque<String>>,
-    stdin: Mutex<Option<ChildStdin>>,
-    child: Mutex<Option<Child>>,
-}
-
-/// Tray handles to update the visual state from the reader thread. The menu itself is
-/// rebuilt whenever the UI language changes, so its handles live behind a mutex too.
+/// Tray handles to update the visual state from core events. The menu itself is rebuilt
+/// whenever the UI language changes, so its handles live behind a mutex too.
 struct TrayUi {
     menu: Mutex<TrayMenuHandles>,
     /// Last presence shown by the tray icon (`Some(true)` = online). The icon is only
@@ -50,13 +45,13 @@ struct TrayUi {
     language: Mutex<String>,
 }
 
-/// Menu items whose state is refreshed from sidecar events.
+/// Menu items whose state is refreshed from core events.
 struct TrayMenuHandles {
     pause: CheckMenuItem<tauri::Wry>,
     autostart: CheckMenuItem<tauri::Wry>,
 }
 
-/// Tray menu labels per UI language. The tooltip comes from the sidecar (which knows the
+/// Tray menu labels per UI language. The tooltip comes from the core (which knows the
 /// next transition); the menu is composed here because it belongs to the shell.
 struct TrayLabels {
     show: &'static str,
@@ -91,14 +86,6 @@ impl TrayLabels {
     }
 }
 
-fn push_log(shared: &Shared, line: String) {
-    let mut logs = shared.logs.lock().unwrap();
-    logs.push_back(line);
-    while logs.len() > 500 {
-        logs.pop_front();
-    }
-}
-
 fn data_dir(app: &AppHandle) -> std::path::PathBuf {
     let base = app
         .path()
@@ -110,196 +97,54 @@ fn data_dir(app: &AppHandle) -> std::path::PathBuf {
 }
 
 /// Reads the UI language from config.json (read-only peek) so the tray menu comes up in the
-/// right language before the first state event; later changes arrive through sidecar state.
+/// right language before the first state event; later changes arrive through core state.
 fn config_language(app: &AppHandle) -> String {
     std::fs::read_to_string(data_dir(app).join("config.json"))
         .ok()
         .and_then(|raw| serde_json::from_str::<Value>(&raw).ok())
-        .and_then(|v| v.get("language").and_then(|l| l.as_str()).map(str::to_string))
+        .and_then(|v| {
+            v.get("language")
+                .and_then(|l| l.as_str())
+                .map(str::to_string)
+        })
         .unwrap_or_else(|| "es".to_string())
 }
 
-/// Removes the extended path prefix (`\\?\`, `\\?\UNC\`) that `canonicalize()` adds on
-/// Windows and that Tauri applies when resolving the resource folder. Node can't resolve
-/// that prefix when it arrives as `argv[1]` (it fails with `EISDIR`/`ENOENT`), so we strip
-/// it before building the command line.
-fn strip_extended_prefix(path: std::path::PathBuf) -> std::path::PathBuf {
-    let s = path.to_string_lossy();
-    if let Some(rest) = s.strip_prefix(r"\\?\UNC\") {
-        std::path::PathBuf::from(format!(r"\\{rest}"))
-    } else if let Some(rest) = s.strip_prefix(r"\\?\") {
-        std::path::PathBuf::from(rest)
+/// Logs a shell-level message through the core (log file + panel); before the core exists
+/// (very early setup) it falls back to stderr.
+fn shell_log(app: &AppHandle, message: String) {
+    if let Some(core) = app.try_state::<Arc<Core>>() {
+        core.log(&message);
     } else {
-        path
+        eprintln!("{message}");
     }
 }
 
-/// Program + arguments to launch the sidecar (dev: node + bundle; prod: bundled runtime).
-fn sidecar_launch(app: &AppHandle) -> (std::path::PathBuf, Vec<String>) {
-    let dir = data_dir(app);
-    let dir_arg = dir.to_string_lossy().to_string();
-
-    if cfg!(debug_assertions) {
-        let root = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
-            .parent()
-            .map(|p| p.to_path_buf())
-            .unwrap_or_else(|| std::path::PathBuf::from("."));
-        let entry = root.join("sidecar").join("dist").join("sidecar.cjs");
-        (
-            std::path::PathBuf::from("node"),
-            vec![
-                entry.to_string_lossy().to_string(),
-                "--data-dir".into(),
-                dir_arg,
-            ],
-        )
-    } else {
-        // `resource_dir()` canonicalizes the exe: on Windows that produces `\\?\C:\...`,
-        // which Node can't resolve as an argument. We normalize it.
-        let res = strip_extended_prefix(
-            app.path()
-                .resource_dir()
-                .unwrap_or_else(|_| std::path::PathBuf::from(".")),
-        );
-        let node = res.join("runtime").join("node.exe");
-        let entry = res.join("sidecar").join("sidecar.cjs");
-        (
-            node,
-            vec![
-                entry.to_string_lossy().to_string(),
-                "--data-dir".into(),
-                dir_arg,
-            ],
-        )
-    }
-}
-
-fn spawn_sidecar(app: &AppHandle) -> std::io::Result<Child> {
-    let (program, args) = sidecar_launch(app);
-    let mut cmd = Command::new(program);
-    cmd.args(args)
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped());
-    #[cfg(windows)]
-    {
-        use std::os::windows::process::CommandExt;
-        cmd.creation_flags(0x0800_0000); // CREATE_NO_WINDOW
-    }
-    cmd.spawn()
-}
-
-fn start_supervisor(app: AppHandle, shared: Arc<Shared>) {
-    std::thread::spawn(move || {
-        let mut backoff: u64 = 1000;
-        while !QUITTING.load(Ordering::SeqCst) {
-            match spawn_sidecar(&app) {
-                Ok(mut child) => {
-                    backoff = 1000;
-                    let stdout = child.stdout.take();
-                    let stderr = child.stderr.take();
-                    *shared.stdin.lock().unwrap() = child.stdin.take();
-                    *shared.child.lock().unwrap() = Some(child);
-                    push_log(&shared, "Sidecar started".into());
-
-                    if let Some(stderr) = stderr {
-                        let app_err = app.clone();
-                        let shared_err = shared.clone();
-                        std::thread::spawn(move || {
-                            // Persist the sidecar stderr to diagnose unexpected exits
-                            let log_path = data_dir(&app_err).join("logs").join("sidecar-stderr.log");
-                            if let Some(parent) = log_path.parent() {
-                                let _ = std::fs::create_dir_all(parent);
-                            }
-                            let mut file = std::fs::OpenOptions::new()
-                                .create(true)
-                                .append(true)
-                                .open(&log_path)
-                                .ok();
-                            let reader = BufReader::new(stderr);
-                            for line in reader.lines().map_while(Result::ok) {
-                                if let Some(f) = file.as_mut() {
-                                    let ts = std::time::SystemTime::now()
-                                        .duration_since(std::time::UNIX_EPOCH)
-                                        .map(|d| d.as_secs())
-                                        .unwrap_or(0);
-                                    let _ = writeln!(f, "[{ts}] {line}");
-                                }
-                                push_log(&shared_err, format!("sidecar(stderr): {line}"));
-                                let _ = app_err.emit("sidecar-message", json!({
-                                    "type": "event",
-                                    "event": "log",
-                                    "data": { "line": format!("[stderr] {line}") }
-                                }));
-                            }
-                        });
-                    }
-
-                    if let Some(stdout) = stdout {
-                        let reader = BufReader::new(stdout);
-                        for line in reader.lines().map_while(Result::ok) {
-                            handle_sidecar_line(&app, &shared, &line);
-                        }
-                    }
-
-                    *shared.stdin.lock().unwrap() = None;
-                    if let Some(mut c) = shared.child.lock().unwrap().take() {
-                        let _ = c.wait();
-                    }
-
-                    if !QUITTING.load(Ordering::SeqCst) {
-                        push_log(&shared, format!("Sidecar exited; retrying in {backoff} ms"));
-                        std::thread::sleep(Duration::from_millis(backoff));
-                        backoff = (backoff * 2).min(15_000);
-                    }
-                }
-                Err(e) => {
-                    push_log(&shared, format!("Could not start the sidecar ({e}); retrying in {backoff} ms"));
-                    std::thread::sleep(Duration::from_millis(backoff));
-                    backoff = (backoff * 2).min(15_000);
-                }
-            }
-        }
-    });
-}
-
-fn handle_sidecar_line(app: &AppHandle, shared: &Arc<Shared>, line: &str) {
-    let Ok(value) = serde_json::from_str::<Value>(line) else {
-        push_log(shared, format!("sidecar: non-JSON output: {line}"));
+/// Side effects for the events the Rust core emits: tray icon/menu and notifications.
+/// The panel listens to the same `sidecar-message` event for its own state.
+fn handle_core_message(app: &AppHandle, value: &Value) {
+    if value.get("type").and_then(Value::as_str) != Some("event") {
         return;
-    };
-
-    if value.get("type").and_then(|t| t.as_str()) == Some("event") {
-        let event = value.get("event").and_then(|e| e.as_str()).unwrap_or("");
-        let data = value.get("data").cloned().unwrap_or(Value::Null);
-        match event {
-            "state" => {
-                *shared.state.lock().unwrap() = Some(data.clone());
-                update_tray(app, &data);
-            }
-            "log" => {
-                if let Some(l) = data.get("line").and_then(|l| l.as_str()) {
-                    push_log(shared, l.to_string());
-                }
-            }
-            "notify" => {
-                let title = data
-                    .get("title")
-                    .and_then(|t| t.as_str())
-                    .unwrap_or("Steam Auto Status")
-                    .to_string();
-                let body = data
-                    .get("body")
-                    .and_then(|b| b.as_str())
-                    .unwrap_or("")
-                    .to_string();
-                let _ = app.notification().builder().title(title).body(body).show();
-            }
-            _ => {}
-        }
     }
-
-    let _ = app.emit("sidecar-message", value);
+    let event = value.get("event").and_then(Value::as_str).unwrap_or("");
+    let data = value.get("data").cloned().unwrap_or(Value::Null);
+    match event {
+        "state" => update_tray(app, &data),
+        "notify" => {
+            let title = data
+                .get("title")
+                .and_then(Value::as_str)
+                .unwrap_or("Steam Auto Status")
+                .to_string();
+            let body = data
+                .get("body")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .to_string();
+            let _ = app.notification().builder().title(title).body(body).show();
+        }
+        _ => {}
+    }
 }
 
 /// Tray icon for a presence. The state is carried by the top-right dot of the mark:
@@ -319,8 +164,13 @@ fn update_tray(app: &AppHandle, state: &Value) {
         if let Some(tooltip) = state.get("tooltip").and_then(|t| t.as_str()) {
             let _ = tray.set_tooltip(Some(tooltip));
         }
-        // Presence can be absent (no session yet): that reads as "not online".
-        let online = state.get("persona").and_then(|p| p.as_str()) == Some("online");
+        // The client must be running for the presence to mean anything; without it the
+        // tray stays grey even if the last sent state was Online.
+        let online = state
+            .get("steamRunning")
+            .and_then(|r| r.as_bool())
+            .unwrap_or(false)
+            && state.get("persona").and_then(|p| p.as_str()) == Some("online");
         let changed = match app.try_state::<TrayUi>() {
             Some(ui) => {
                 let mut last = ui.online.lock().unwrap();
@@ -386,20 +236,6 @@ fn update_tray(app: &AppHandle, state: &Value) {
     }
 }
 
-fn send_to_sidecar(shared: &Shared, method: &str, params: Option<Value>) -> Result<(), String> {
-    let mut guard = shared.stdin.lock().unwrap();
-    let stdin = guard.as_mut().ok_or("The sidecar is not available")?;
-    let id = CMD_SEQ.fetch_add(1, Ordering::SeqCst);
-    let msg = json!({
-        "type": "cmd",
-        "id": id.to_string(),
-        "method": method,
-        "params": params.unwrap_or_else(|| json!({})),
-    });
-    writeln!(stdin, "{msg}").map_err(|e| e.to_string())?;
-    stdin.flush().map_err(|e| e.to_string())
-}
-
 fn attach_window_events(window: &tauri::WebviewWindow) {
     let w = window.clone();
     window.on_window_event(move |event| {
@@ -426,32 +262,21 @@ fn show_window(app: &AppHandle) {
         .build()
     {
         Ok(w) => attach_window_events(&w),
-        Err(e) => push_log(
-            &app.state::<Arc<Shared>>(),
-            format!("Could not create the window: {e}"),
-        ),
+        Err(e) => shell_log(app, format!("Could not create the window: {e}")),
     }
 }
 
 // ---------------------------------------------------------------- commands exposed to the UI
 
 #[tauri::command]
-fn get_cached_state(shared: tauri::State<'_, Arc<Shared>>) -> Value {
-    shared
-        .state
-        .lock()
-        .unwrap()
-        .clone()
-        .unwrap_or(Value::Null)
+fn get_cached_state(core: tauri::State<'_, Arc<Core>>) -> Value {
+    core.snapshot()
 }
 
+/// Command bridge kept under its old name; the UI does not change.
 #[tauri::command]
-fn sidecar_command(
-    shared: tauri::State<'_, Arc<Shared>>,
-    method: String,
-    params: Option<Value>,
-) -> Result<(), String> {
-    send_to_sidecar(&shared, &method, params)
+fn sidecar_command(core: tauri::State<'_, Arc<Core>>, method: String, params: Option<Value>) {
+    core.handle_command(&method, params.unwrap_or_else(|| json!({})));
 }
 
 #[tauri::command]
@@ -475,13 +300,22 @@ fn set_autostart(app: AppHandle, enable: bool) -> Result<(), String> {
     }
 }
 
-/// Opens the app data folder (config, token, logs) in the system file manager.
+/// Opens the app data folder (config, logs) in the system file manager.
 #[tauri::command]
 fn open_data_folder(app: AppHandle) -> Result<(), String> {
     let dir = data_dir(&app);
     app.opener()
         .open_path(dir.to_string_lossy().to_string(), None::<&str>)
         .map_err(|e| e.to_string())
+}
+
+/// Opens the Steam client (or focuses it if it is already running).
+///
+/// `steam://open/main` goes through the registered protocol handler; the app itself never
+/// signs in. `ShellExecuteW` dispatches the URL with no `cmd` wrapper and no console flash.
+#[tauri::command]
+fn open_steam() -> Result<(), String> {
+    steam::open_main()
 }
 
 /// Opens an external link with the default browser (http/https only).
@@ -502,11 +336,8 @@ fn copy_text(app: AppHandle, text: String) -> Result<(), String> {
 }
 
 #[tauri::command]
-fn quit_app(app: AppHandle, shared: tauri::State<'_, Arc<Shared>>) {
-    QUITTING.store(true, Ordering::SeqCst);
-    if let Some(mut child) = shared.child.lock().unwrap().take() {
-        let _ = child.kill();
-    }
+fn quit_app(app: AppHandle) {
+    core::request_quit();
     app.exit(0);
 }
 
@@ -539,15 +370,23 @@ fn build_tray_menu(
 
     let menu = Menu::with_items(
         app,
-        &[&show, &online30, &invisible, &pause, &autostart, &separator, &quit],
+        &[
+            &show, &online30, &invisible, &pause, &autostart, &separator, &quit,
+        ],
     )?;
     Ok((menu, TrayMenuHandles { pause, autostart }))
 }
 
-fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
+fn with_core<F: FnOnce(&Core)>(app: &AppHandle, action: F) {
+    if let Some(core) = app.try_state::<Arc<Core>>() {
+        action(&core);
+    }
+}
+
+fn build_tray(app: &AppHandle) -> tauri::Result<()> {
     let autostart_enabled = app.autolaunch().is_enabled().unwrap_or(false);
     // The menu comes up in the language saved in config.json; the pause checkmark starts
-    // unchecked and the first state event (moments after the sidecar starts) refreshes it.
+    // unchecked and the first state event (moments after the core starts) refreshes it.
     let language = config_language(app);
     let (menu, handles) = build_tray_menu(app, &language, false, autostart_enabled)?;
 
@@ -557,7 +396,7 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
         language: Mutex::new(language),
     });
 
-    // Start with the "invisible" tray icon: it is the presence until the sidecar reports
+    // Start with the "invisible" tray icon: it is the presence until the core reports
     // otherwise, so the tray never shows a stale state on launch.
     let icon = match tray_state_icon(false) {
         Some(icon) => icon,
@@ -567,7 +406,6 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
             .ok_or_else(|| tauri::Error::AssetNotFound("default icon not available".into()))?,
     };
 
-    let shared_menu = shared.clone();
     TrayIconBuilder::with_id("main")
         .icon(icon)
         .tooltip("Steam Auto Status")
@@ -583,58 +421,45 @@ fn build_tray(app: &AppHandle, shared: Arc<Shared>) -> tauri::Result<()> {
                 show_window(tray.app_handle());
             }
         })
-        .on_menu_event(move |app, event| {
-            let shared = shared_menu.clone();
-            match event.id().as_ref() {
-                "show" => show_window(app),
-                "online30" => {
-                    let _ = send_to_sidecar(&shared, "forceState", Some(json!({ "state": "online", "minutes": 30 })));
+        .on_menu_event(|app, event| match event.id().as_ref() {
+            "show" => show_window(app),
+            "online30" => with_core(app, |core| {
+                core.handle_command("forceState", json!({ "state": "online", "minutes": 30 }));
+            }),
+            "invisible" => with_core(app, |core| {
+                core.handle_command("forceState", json!({ "state": "invisible", "minutes": 30 }));
+            }),
+            "pause" => with_core(app, |core| {
+                let paused_now = core
+                    .snapshot()
+                    .get("paused")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false);
+                let method = if paused_now { "resume" } else { "pause" };
+                core.handle_command(method, json!({}));
+            }),
+            "autostart" => {
+                let checked = app
+                    .try_state::<TrayUi>()
+                    .and_then(|ui| ui.menu.lock().unwrap().autostart.is_checked().ok())
+                    .unwrap_or(false);
+                let manager = app.autolaunch();
+                let result = if checked {
+                    manager.enable()
+                } else {
+                    manager.disable()
+                };
+                if result.is_ok() {
+                    with_core(app, |core| {
+                        core.handle_command("setConfig", json!({ "startWithWindows": checked }));
+                    });
                 }
-                "invisible" => {
-                    let _ = send_to_sidecar(&shared, "forceState", Some(json!({ "state": "invisible", "minutes": 30 })));
-                }
-                "pause" => {
-                    let paused_now = app
-                        .try_state::<Arc<Shared>>()
-                        .and_then(|s| {
-                            s.state
-                                .lock()
-                                .unwrap()
-                                .as_ref()
-                                .and_then(|st| st.get("paused").and_then(|p| p.as_bool()))
-                        })
-                        .unwrap_or(false);
-                    let method = if paused_now { "resume" } else { "pause" };
-                    let _ = send_to_sidecar(&shared, method, None);
-                }
-                "autostart" => {
-                    let checked = app
-                        .try_state::<TrayUi>()
-                        .and_then(|ui| ui.menu.lock().unwrap().autostart.is_checked().ok())
-                        .unwrap_or(false);
-                    let manager = app.autolaunch();
-                    let result = if checked {
-                        manager.enable()
-                    } else {
-                        manager.disable()
-                    };
-                    if result.is_ok() {
-                        let _ = send_to_sidecar(
-                            &shared,
-                            "setConfig",
-                            Some(json!({ "startWithWindows": checked })),
-                        );
-                    }
-                }
-                "quit" => {
-                    QUITTING.store(true, Ordering::SeqCst);
-                    if let Some(mut child) = shared.child.lock().unwrap().take() {
-                        let _ = child.kill();
-                    }
-                    app.exit(0);
-                }
-                _ => {}
             }
+            "quit" => {
+                core::request_quit();
+                app.exit(0);
+            }
+            _ => {}
         })
         .build(app)?;
 
@@ -662,17 +487,33 @@ fn main() {
             launch_hidden,
             set_autostart,
             open_data_folder,
+            open_steam,
             open_url,
             copy_text,
             quit_app
         ])
         .setup(|app| {
             let handle = app.handle().clone();
-            let shared = Arc::new(Shared::default());
-            app.manage(shared.clone());
 
-            build_tray(&handle, shared.clone())?;
-            start_supervisor(handle.clone(), shared.clone());
+            // One side-effect listener for the events the core emits: it updates the tray
+            // icon/menu and shows Windows notifications. The panel listens to the same
+            // `sidecar-message` event for its own state.
+            let listener_handle = handle.clone();
+            let _ = app.listen("sidecar-message", move |event| {
+                if let Ok(value) = serde_json::from_str::<Value>(event.payload()) {
+                    handle_core_message(&listener_handle, &value);
+                }
+            });
+
+            build_tray(&handle)?;
+
+            let core = Core::new(handle.clone(), data_dir(&handle));
+            app.manage(core.clone());
+            core.start();
+            // The first state event may be emitted before the listener is fully wired; make
+            // sure the tray reflects the initial state immediately.
+            let initial_state = core.snapshot();
+            update_tray(&handle, &initial_state);
 
             if let Some(window) = app.get_webview_window("main") {
                 attach_window_events(&window);
@@ -684,7 +525,7 @@ fn main() {
         .expect("failed to build the Tauri application")
         .run(|app, event| {
             if let RunEvent::ExitRequested { api, code, .. } = &event {
-                if code.is_none() && !QUITTING.load(Ordering::SeqCst) {
+                if code.is_none() && !core::is_quitting() {
                     api.prevent_exit();
                 }
             }
