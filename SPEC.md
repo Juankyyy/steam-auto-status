@@ -21,111 +21,104 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 ## 2. Por qué es posible (fundamento técnico)
 
 1. **Steam no tiene programación nativa de estado.** No existe opción oficial en cliente,
-   web ni móvil. La vía es una sesión propia adicional ("cliente fantasma") que reporta
-   presencia por la cuenta.
-2. **Semántica multi-sesión (unión):** Steam combina el estado de todas las sesiones de la
-   cuenta. Si **alguna** sesión está en `Online`, los amigos ven "Conectado"; si **todas**
-   están `Invisible`/`Offline`, los ven desconectado. (Validado: truco conocido de
-   "cliente offline + app móvil online = sigo apareciendo conectado".)
-3. **Consecuencia práctica:** el cliente de Steam del usuario se queda en **Invisible**
-   (estado base) y la app mantiene una sesión 24/7 que dentro de la ventana se pone en
-   `Online` y fuera en `Invisible`. Resultado: los amigos lo ven Conectado solo en la
-   franja, incluso si el cliente está cerrado.
-4. **Convivencia de sesiones:** Steam permite múltiples sesiones simultáneas (cliente +
-   sesión de la app), siempre que el `logonID` no colisione. El cliente oficial lo deriva de
-   la IP privada y `steam-user` usa `0` por defecto —valor compartido por todas sus
-   sesiones, así que dos instancias de la app se expulsarían entre sí—, por lo que la app
-   fija un **`logonID` aleatorio único por proceso** en cada logon. La app **nunca "juega"**
-   nada (`gamesPlayed` no se usa), por lo que no interfiere con juegos ni VAC.
-   (Observado en los logs del cliente de Steam: cada logon nuevo de la cuenta hace que el
-   cliente oficial reprocese su lista de amigos; por eso el paquete de logon se mantiene
-   mínimo —sin renovación de token ni sesión web por logon— y se evitan reconexiones
-   innecesarias; ver §4.2.)
-5. **Autenticación:** primer login interactivo en la UI con dos métodos: **código QR**
-   (recomendado; `steam-session` + app móvil de Steam, sin escribir nada) o
-   **usuario/contraseña** (con confirmación/aprobación desde la app móvil). El login obtiene
-   un **refresh token** de plataforma `SteamClient` (JWT válido ~200 días; la app lo renueva
-   de forma programada, ver §4.2, nunca durante un logon) que se guarda localmente. Los
-   arranques posteriores no piden nada.
+   web ni móvil.
+2. **El cliente oficial entiende comandos locales de estado.** Su propio menú Amigos →
+   Estado usa `steam://friends/status/online`, `.../away`, `.../invisible` y `.../offline`.
+   Son URLs del protocolo `steam://`, documentadas por Valve y atendidas por el cliente que
+   ya está ejecutándose.
+3. **La app no crea una sesión:** envía al cliente local el mismo cambio que haría el usuario
+   con el menú. No hay login, token, QR ni segunda sesión; la app ni siquiera conoce la
+   cuenta.
+4. **Consecuencia práctica:** dentro de la ventana la app pide `Online`; fuera, `Invisible`.
+   Si Steam está cerrado, la cuenta ya está Offline y la app no puede hacer nada hasta que el
+   cliente vuelva a abrirse y a iniciar sesión.
+5. **Riesgo:** al no abrir sesiones adicionales se elimina el patrón de logons/reconexiones
+   que Steam puede marcar como actividad sospechosa. Sigue siendo automatización de la
+   propia cuenta (zona gris del ToS), pero mucho menos invasiva.
 
 ## 3. Decisiones tomadas
 
 | Tema | Decisión |
 |---|---|
-| Núcleo | **Node.js + `steam-user`** (Node v24.12.0 ya instalado), empaquetado como **sidecar** |
+| Núcleo | **Rust dentro de la app Tauri** (`src-tauri/src/`): horario, config, logs y control del cliente local; sin sidecar ni runtime de Node. Usa `chrono` y `windows-sys` (Toolhelp + ShellExecuteW) |
 | Shell de escritorio | **Tauri v2 (Rust)**: bandeja nativa + ventana WebView2. Electron descartado por peso (~150–250 MB permanentes en reposo) |
 | UI | **React + TypeScript + Tailwind CSS + shadcn/ui + lucide**; animaciones CSS puras (sin React Bits pesados) |
-| Comunicación shell ↔ sidecar | **stdin/stdout, JSON por línea** (sin puertos abiertos, sin HTTP) |
+| Comunicación UI ↔ núcleo | **Comandos y eventos Tauri**; se conservan los nombres `sidecar_command` y `sidecar-message` por compatibilidad con la UI, pero ya no hay proceso ni stdin/stdout |
 | Datos | **`Documents\steam-auto-status\`** (ruta resuelta con la API de carpetas conocidas de Windows; configurable en ajustes) |
-| Distribución | `tauri build` → **instalador NSIS `.exe`** (~60–90 MB), sin firma de código |
+| Distribución | `tauri build` → **instalador NSIS `.exe`** (~2,5 MB; ~12 MB instalado), sin firma de código |
 | Arranque con Windows | Login item con `--hidden` (arranca solo en bandeja) |
 | Horario por defecto | L–V 17:30 → 01:00 |
 | Zona horaria | Hora local de la máquina |
 | Idioma de la UI | **Español/English** (`language` en `config.json`); primer arranque: idioma de Windows (es → Español, resto → English). Bandeja, tooltip y notificaciones siguen el mismo ajuste |
-| Estado base del cliente Steam | **Invisible** (el usuario debe dejarlo así) |
-| Identidad visual | Isotipo propio en SVG (`assets/icon-source.svg`); iconos de app con `tauri icon` y **icono de bandeja distinto según el estado** (punto verde Conectado / gris Invisible) |
+| Presencia | El cliente oficial debe estar **abierto y con sesión iniciada**; la app le pide `Online`/`Invisible`. Nunca usa `Offline` |
+| Identidad visual | Isotipo propio en SVG (`assets/icon-source.svg`); iconos de app con `tauri icon` y **icono de bandeja distinto según el estado** (punto verde Conectado / gris Invisible o Steam cerrado) |
 
 ## 4. Arquitectura
 
 ### 4.1 Vista general
 
 ```
-┌─ Shell Tauri (Rust) — ~10-25 MB en reposo ───────────────────┐
+┌─ App Tauri (Rust) — ~35 MB en reposo ────────────────────────┐
 │ · Bandeja: tooltip dinámico + menú (Abrir panel, Conectado   │
 │   30 min, Invisible ahora, Pausar/Reanudar, Iniciar con      │
 │   Windows ✓, Salir)                                          │
 │ · Ventana (WebView2): UI React; se DESTRUYE al cerrar y se   │
 │   recrea desde la bandeja (libera WebView2 → reposo ligero)  │
-│ · Supervisa el sidecar (reinicio automático con backoff)     │
+│ · Núcleo en proceso: horario, config, logs, pausa/force      │
+│ · Detecta steam.exe (Toolhelp) y envía la URL (ShellExecuteW)│
+│ · Comando «Abrir Steam» (steam://open/main)                  │
+│ · Datos: config.json · logs\  (Documents)                    │
 │ · Plugins: single-instance, autostart, notification          │
 └─────────────┬────────────────────────────────────────────────┘
-              │ IPC: stdin/stdout, JSON por línea
-┌─────────────▼─ Sidecar Node + steam-user — ~50-70 MB ────────┐
-│ · Sesión de Steam 24/7: login (refresh token), reconexión    │
-│ · Ventana horaria + setPersona(Online|Invisible)             │
-│ · Datos: config.json · auth.json · logs\  (Documents)        │
+              │ comando local (ShellExecuteW)
+┌─────────────▼─ Cliente de Steam (ya abierto) ────────────────┐
+│ · Sesión normal del usuario; cambia su propia presencia      │
 └──────────────────────────────────────────────────────────────┘
 ```
 
-### 4.2 Sidecar Node (núcleo) — `sidecar/`
+### 4.2 Núcleo Rust — `src-tauri/src/`
 
-Lógica pura, independiente de la UI (emite eventos hacia el shell):
+El horario, la configuración, los logs y el control del cliente local viven dentro de la
+app, en módulos Rust: `core.rs` (estado, temporizadores y comandos), `config.rs`,
+`schedule.rs`, `logging.rs` y `steam.rs`. La UI no cambia: sigue invocando
+`sidecar_command` y escuchando `sidecar-message`, pero ya no hay proceso ni IPC por
+stdin/stdout.
 
-1. Recibe la carpeta de datos del shell (`--data-dir`) y carga `config.json`.
-2. **Primer arranque:** pide login (usuario/contraseña/2FA) a través del shell → `logOn()` y
-   guarda `auth.json` con el refresh token. Arranques siguientes: `logOn({ refreshToken,
-   machineName, logonID: <aleatorio por proceso> })` con `renewRefreshTokens: false` y
-   `webLogOn()` anulado: el logon se mantiene limpio (sin peticiones de token ni de sesión
-   web) porque cada sesión nueva hace que el cliente oficial de Steam reprocese su lista de
-   amigos (ver §2.4).
-3. **Renovación de token programada:** cada 30 s se comprueba el JWT guardado (edad > 45
-   días o caduca en < 60 días) y, si toca, se renueva con `LoginSession.renewRefreshToken()`
-   —nunca durante un logon y preferiblemente con el cliente de Steam cerrado (se aplaza
-   hasta 7 días si está abierto)—. Si `steam-user` emitiera `refreshToken` (flujo heredado),
-   también se persiste al momento.
-4. Cada **30 s**: calcular estado deseado (`Online` dentro de ventana, `Invisible` fuera).
-   Si difiere del aplicado → `setPersona(EPersonaState.Online | .Invisible)`.
-5. Al arrancar (PC encendido a mitad de ventana), suspensión/reanudación o reconexión:
-   recalcular y aplicar de inmediato. `autoRelogin: true` para reconexiones de Steam.
-6. Log con marca de hora en `logs/status.log`; rotación si crece demasiado.
-7. Forzar estado (desde la UI de pruebas) con **timeout**: tras X minutos vuelve solo al
-   modo automático.
-8. `logout`: borra `auth.json` (botón "Cerrar sesión" en la UI).
-9. **Avatar de la cuenta**: al conectar resuelve la URL del avatar (XML público del perfil
-   por HTTPS; fallback: `getPersonas` sobre la propia conexión), la cachea en
-   `profile.json` y la publica en el estado (`account.avatarUrl`) para la cabecera.
-10. **Vigilancia de conexión:** watchdog de logon (45 s) y de reconexión automática (180 s):
-    si Steam nunca responde (observado: `steam-user` reintenta en silencio y la UI se queda
-    en «Conectando…» indefinidamente), se rehace la conexión con un `logonID` nuevo y
-    **backoff exponencial** (5 s → 5 min; 10 min si Steam responde `RateLimitExceeded`).
-    Guardas anti re-entrada y cooldown de 15 s evitan logons encadenados (p. ej. pulsar
-    «Reconectar» repetidamente). El log incluye líneas `debug:` filtradas de `steam-user`
-    (logon/reconexión/renovación) para diagnóstico.
-11. **Idioma:** los pocos textos que produce el sidecar (tooltip de bandeja, notificaciones
-    y los `lastError`/`reason` que la UI muestra tal cual) siguen `config.language`
-    (diccionario propio es/en); el resto del estado va sin texto pre-renderizado y la UI
-    compone sus etiquetas. El log (`status.log`) es **siempre en inglés**: es diagnóstico
-    técnico, no interfaz.
+1. Carga `config.json` de la carpeta de datos y lo mantiene en memoria.
+2. Cada **30 s**: calcula el estado deseado (`Online` dentro de ventana, `Invisible` fuera;
+   un `forceState` activo manda). Si difiere del último aplicado, lo envía al cliente.
+3. **Control del cliente local** (`steam.rs`):
+   - `is_running()` recorre la lista de procesos con **Toolhelp**
+     (`CreateToolhelp32Snapshot`) y busca `steam.exe`, sin lanzar `tasklist`.
+   - `send_persona()` envía `steam://friends/status/online|invisible` con
+     **`ShellExecuteW`**, sin `cmd` ni ventana de consola. El envío corre en un hilo con
+     timeout de 2 s para que un shell lento no congele el núcleo. Comprueba el proceso justo
+     antes de enviar para no lanzar Steam sin querer.
+4. **Detección de Steam cada 10 s.** Al arrancar el cliente se espera 10 s y se aplica el
+   estado; se reintenta a los 40 s y 90 s por si el auto-login tarda. Al cerrarse Steam se
+   limpia el estado aplicado (`persona = null`) y la UI muestra «Steam cerrado».
+5. Al arrancar la app (PC encendido a mitad de ventana), al reanudar la app o al cambiar el
+   horario: recalcular y aplicar de inmediato.
+6. **Pausa:** deja de enviar cambios y conserva el estado actual; «Reaplicar» sigue
+   funcionando porque es una acción manual. **Reanudar:** aplica el horario de inmediato.
+   **Force:** se aplica aunque esté pausado y, al expirar, vuelve al horario si no está
+   pausado.
+7. Log con marca de hora en `logs/status.log`; rotación si crece demasiado.
+8. **Limpieza de restos antiguos:** si existen `auth.json`, `profile.json` o `steam-data/`,
+   el estado expone `legacyDataPresent`. El comando `deleteLegacyData` (solo con confirmación
+   del usuario) borra esos restos, nunca `config.json` ni `logs/`.
+9. **Idioma:** los pocos textos que produce el núcleo (tooltip de bandeja, notificaciones)
+   siguen `config.language` (diccionario propio es/en); el resto del estado va sin texto
+   pre-renderizado y la UI compone sus etiquetas. El log (`status.log`) es **siempre en
+   inglés**: es diagnóstico técnico, no interfaz.
+
+**Comportamiento ante errores:** el comando local no devuelve confirmación de que Steam lo
+haya aplicado. La UI muestra el **último comando enviado** y el estado del proceso, no un
+estado «real» garantizado. Si Steam está en modo Offline, en la pantalla de login o corriendo
+como administrador, el comando puede ignorarse; el log lo registra y el botón «Reaplicar»
+permite reintentar. La app tampoco lee la presencia real: si el usuario cambia el estado a
+mano, no se corrige hasta la próxima transición, el siguiente arranque de la app o de Steam,
+o «Reaplicar»; no hay reaplicación periódica para no pelearse con un cambio manual.
 
 **Semántica de la ventana horaria (cruza medianoche):** una ventana se define por
 `(día de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
@@ -137,38 +130,42 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
 
 - Lun 17:30 → Mar 01:00 · Mar → Mié · Mié → Jue · Jue → Vie · Vie 17:30 → Sáb 01:00
 
-**Protocolo IPC (JSON por línea):**
+**Contrato UI ↔ núcleo:** se conservan los nombres del sidecar para no tocar la UI.
 
-- Shell → sidecar: `{ "type":"cmd", "id":"…", "method":"…", "params":{} }`
-  con métodos: `getState`, `getConfig`, `setConfig`, `forceState`, `pause`, `resume`,
-  `login`, `logout`, `getLogTail`, `clearLog`.
-- Sidecar → shell: `{ "type":"res", "id":"…", "result":{} }` o `{ "type":"res",
-  "id":"…", "error":{} }`.
-- Eventos sidecar → shell: `{ "type":"event", "event":"state|log|logsCleared|connection|
-  authRequired|configChanged", "data":{} }`.
+- Comandos (`invoke('sidecar_command')`): `getState`, `getConfig`, `setConfig`,
+  `forceState`, `clearForce`, `pause`, `resume`, `reapply`, `deleteLegacyData`,
+  `getLogTail`, `clearLog`.
+- Respuestas: `{ "type":"res", "result":{} }` o `{ "type":"res", "error":"…" }` (evento
+  `sidecar-message`).
+- Eventos: `{ "type":"event", "event":"state|log|logsCleared|configChanged|notify",
+  "data":{} }`.
 
 ### 4.3 Shell Tauri (Rust) — `src-tauri/`
 
-- **Bandeja**: tooltip dinámico ("Conectado — Invisible a la 01:00", en el idioma
-  configurado) y menú contextual: Abrir panel · Conectado 30 min · Invisible ahora ·
-  Pausar/Reanudar automatización · Iniciar con Windows ✓ · Salir. Las etiquetas del menú
-  viven en el shell (`TrayLabels`, es/en) y se **reconstruye el menú** cuando cambia
+- **Bandeja**: tooltip dinámico ("Steam Auto Status — Invisible (Conectado a las 17:30)",
+  en el idioma configurado) y menú contextual: Abrir panel · Conectado 30 min · Invisible
+  ahora · Pausar/Reanudar automatización · Iniciar con Windows ✓ · Salir. Las etiquetas del
+  menú viven en el shell (`TrayLabels`, es/en) y se **reconstruye el menú** cuando cambia
   `config.language`, conservando los checkmarks. El **icono de la bandeja refleja la
-  presencia**: el punto superior derecho del isotipo es verde con Conectado y gris (slate)
-  con Invisible; solo se reemplaza cuando el estado cambia, para evitar parpadeos.
+  presencia**: el punto superior derecho del isotipo es verde con Conectado y Steam abierto,
+  y gris (slate) con Invisible o Steam cerrado; solo se reemplaza cuando el estado cambia,
+  para evitar parpadeos.
 - **Ventana**: oculta por defecto (`--hidden`); se abre desde la bandeja; **se destruye al
   cerrar** (no solo se oculta) para liberar los procesos WebView2; se recrea al reabrir.
   Cerrar nunca debe terminar el proceso; "Salir" solo desde la bandeja.
-- **Supervisión del sidecar**: lo lanza al arrancar y lo reinicia con backoff si cae.
+- **Núcleo en proceso**: `main.rs` arranca el `Core` (hilos de detección cada 10 s,
+  reevaluación cada 30 s y reintentos de arranque de Steam). No hay sidecar ni supervisor
+  que reiniciar; un fallo del núcleo sería un fallo de la app.
 - **Instancia única** (`tauri-plugin-single-instance`): abrir dos veces solo enfoca la
-  existente (evita dos sesiones `steam-user` expulsándose y temporizadores duplicados).
+  existente (evita dos núcleos enviando comandos y temporizadores duplicados).
 - **Autostart** (`tauri-plugin-autostart`): registro Run con `--hidden`.
 - **Notificaciones** (`tauri-plugin-notification`): toast al cambiar de estado (toggle).
 - **Ajustes de sistema** (`tauri-plugin-opener` + `tauri-plugin-clipboard-manager`):
-  comandos `open_data_folder` (abre la carpeta de datos en el Explorador), `open_url`
-  (enlaces externos en el navegador) y `copy_text` (copia el diagnóstico al portapapeles).
+  comandos `open_data_folder` (abre la carpeta de datos en el Explorador), `open_steam`
+  (`steam://open/main` con `ShellExecuteW`, abre o enfoca el cliente), `open_url` (enlaces
+  externos en el navegador) y `copy_text` (copia el diagnóstico al portapapeles).
 - Resuelve la carpeta de Documentos del usuario (`BaseDirectory::Document`) y se la pasa al
-  sidecar como `--data-dir`.
+  `Core` al construirlo; ya no hay argumentos de proceso para un sidecar.
 
 ### 4.4 UI — `ui/`
 
@@ -178,37 +175,31 @@ webview de Tauri y en un futuro despliegue PWA servido como sitio estático). Ob
 medio plazo: que la interfaz sea instalable como **PWA**; el primer paso ha sido separar
 el panel de control del módulo de ajustes. La cabecera muestra a la izquierda el isotipo
 (SVG de `ui/src/assets/logo.svg`, fuente `assets/logo-glyph.svg`) junto al nombre de la app,
-y a la derecha el chip de la
-cuenta (avatar cuadrado con esquinas redondeadas estilo icono de iOS + nombre + punto de
-estado), el badge de conexión mientras no haya cuenta, o un botón **Iniciar sesión**
-cuando no existe ninguna sesión guardada. Junto al nombre de la app hay un badge con la
+y a la derecha el estado del cliente de Steam («Steam abierto / iniciando / cerrado»); ya no
+hay cuenta, avatar ni botón de login. Junto al nombre de la app hay un badge con la
 versión (`vX.Y.Z`, inyectada en tiempo de build desde `tauri.conf.json`; es la misma
 fuente que usa «Acerca de»).
 
-**Panel de control** (`/`): estado, resumen del horario y primer login:
+**Panel de control** (`/`): estado del cliente y resumen del horario:
 
-1. **Estado**: "Conectado (dentro de ventana)" / "Invisible" + cuenta atrás a la próxima
-   transición ("Online en 2 h 14 min" / "Invisible a la 01:00").
+1. **Estado**: "Conectado" / "Invisible" / "Steam cerrado" / "Esperando a Steam" + cuenta
+   atrás a la próxima transición ("Online en 2 h 14 min" / "Invisible a la 01:00") y el
+   último cambio aplicado ("Último cambio: Invisible a la 01:00").
 2. **Programación**: resumen del horario, interruptor rápido activar/pausar y enlace
    "Editar en Ajustes".
-3. **Primer login** (visible cuando el sidecar emite `authRequired`):
-   - **Pestaña "Código QR"** (por defecto): el sidecar abre una sesión QR con
-     `steam-session` (`EAuthTokenPlatformType.SteamClient`), genera la imagen con `qrcode`
-     y la expone en el estado (`qrDataUrl`). Fases: `awaiting_qr` → (escaneo)
-     `awaiting_approval` → `connecting` → conectado. Caduca a los 2,5 min (`qr_expired`)
-     con botón de regenerar.
-   - **Pestaña "Usuario y contraseña"**: también con `steam-session`
-     (`startWithCredentials`): si Steam pide confirmación desde la app móvil, el panel lo
-     indica y se completa al aprobar; si pide código (email o app), aparece el campo de
-     código (`submitSteamGuardCode`, con manejo de "código incorrecto → esperar 30 s").
+3. **Steam cerrado**: aviso con botón **Abrir Steam** cuando el proceso no está en marcha;
+   mientras Steam inicia, un aviso informativo. Si el último comando falló, un aviso con
+   botón **Reaplicar ahora**.
 
 **Ajustes** (`/settings`): configuración persistente y mantenimiento, organizada en
 tarjetas:
 
 - **Horario**: horas inicio/fin, días de la semana, resumen de la franja (día, horas y
   duración) y botón para restaurar los valores por defecto.
-- **Cuenta de Steam**: cuenta conectada (nombre + SteamID), botón Reconectar, nombre de
-  máquina (`machineName`) y cerrar sesión (borra el token).
+- **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
+  estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
+  antigua (`auth.json`, `profile.json`, `steam-data/`), una tarjeta de limpieza con
+  confirmación y enlace a «Gestionar dispositivos de Steam».
 - **Aplicación**: iniciar con Windows, notificaciones y modo desarrollador.
 - **Idioma**: conmutador Español | English (los nombres, cada uno en su idioma); el cambio
   se aplica al momento en interfaz, bandeja y notificaciones.
@@ -227,7 +218,7 @@ expone el hook `useI18n()` con `t(clave, params)` (plantillas `{param}`) y el id
 sale de `config.json › language`, así que la interfaz, la bandeja y las notificaciones
 siguen un único ajuste. Formato con `Intl` por idioma (24 h en español, 12 h AM/PM en
 inglés; duraciones «7 h 30 min» / «7h 30m»); los campos `type="time"` siguen el formato de
-Windows. El `<html lang>` se actualiza en vivo. Los logs del sidecar/shell y el diagnóstico
+Windows. El `<html lang>` se actualiza en vivo. Los logs del núcleo/shell y el diagnóstico
 técnico van siempre en inglés.
 
 **Desarrollador** (`/dev`): herramientas internas que no deben aparecer para el usuario
@@ -236,24 +227,28 @@ en la navegación — y la ruta solo es accesible — con el **modo desarrollado
 Ajustes › Aplicación (`devMode` en `config.json`, por defecto `false`); con el modo
 apagado, entrar en `/dev` redirige al panel.
 
-Comunicación: `invoke` (Tauri commands) → shell → sidecar; eventos del sidecar → shell →
-`emit` al webview.
+Comunicación: `invoke` (Tauri commands) → `Core::handle_command`; el núcleo emite
+`sidecar-message` → listener de la UI y del shell (bandeja/notificaciones). Todo ocurre
+dentro del mismo proceso.
 
 ### 4.5 Estructura de archivos
 
 ```
 steam-auto-status/
-├─ src-tauri/            # shell Rust (bandeja, ventana, IPC, plugins, iconos)
+├─ src-tauri/            # app Rust (bandeja, ventana, núcleo, plugins, iconos)
 │  ├─ tauri.conf.json
 │  ├─ Cargo.toml
 │  ├─ icons/             # iconos generados (icons/tray/ = iconos de bandeja por estado)
-│  └─ src/main.rs
+│  └─ src/
+│     ├─ main.rs         # shell: bandeja, ventana, comandos y plugins
+│     ├─ core.rs         # estado, temporizadores, aplicado de presencia y contrato UI
+│     ├─ config.rs       # config.json: defaults, migración y sanitizado
+│     ├─ schedule.rs     # ventana horaria y próxima transición
+│     ├─ logging.rs      # status.log: rotación, cola y vaciado
+│     └─ steam.rs        # Toolhelp + ShellExecuteW
 ├─ ui/                   # React + TS + Tailwind + shadcn/ui (Vite)
 │  ├─ components.json
 │  └─ src/               # incluye assets/logo.svg (isotipo de la UI)
-├─ sidecar/              # núcleo Node + steam-user
-│  ├─ package.json
-│  └─ src/
 ├─ assets/               # identidad visual y capturas del README (ver §4.9)
 ├─ package.json          # scripts raíz (dev, build)
 ├─ SPEC.md
@@ -265,21 +260,23 @@ steam-auto-status/
 ```
 C:\Users\Juanky\Documents\steam-auto-status\
 ├─ config.json       ← editable a mano (horario, días, opciones)
-├─ auth.json         ← refresh token + steamID (credencial de login)
-├─ profile.json      ← cache del avatar de la cuenta (borrable sin riesgo)
-└─ logs\
-   └─ status.log
+├─ logs\
+│  └─ status.log
+└─ (restos opcionales de la versión antigua)
+   ├─ auth.json       ← token viejo; la app no lo lee
+   ├─ profile.json    ← avatar viejo; la app no lo lee
+   └─ steam-data\     ← datos de sesión viejos; la app no los lee
 ```
 
 - Ruta por defecto resuelta con la API de carpetas conocidas de Windows (no escrita a mano:
   funciona con Documents movida o redirigida a OneDrive). Configurable en ajustes.
-- El **desinstalador no borra** esta carpeta: los datos y el token sobreviven a
-  reinstalaciones (actualizar sin volver a loguear).
-- Botón **Cerrar sesión** en la app: borra `auth.json`.
-- **Aviso OneDrive:** si Documents está sincronizada, `auth.json` subiría a la nube.
-  Mitigaciones disponibles: mover solo `auth.json` a `%LOCALAPPDATA%` o excluir la carpeta
-  en OneDrive.
-- Las credenciales (usuario/contraseña) **no** se guardan nunca; solo el token.
+- El **desinstalador no borra** esta carpeta: la configuración y los logs sobreviven a
+  reinstalaciones.
+- La app **no guarda credenciales ni tokens**. `auth.json`, `profile.json` y `steam-data/`
+  son restos de versiones anteriores; el usuario puede borrarlos desde Ajustes › Cliente de
+  Steam (con confirmación) y revocar el token en Steam.
+- **Aviso OneDrive:** si Documents está sincronizada, esos restos antiguos pueden seguir en
+  la nube hasta que se borren o se revoque el token.
 
 Ejemplo de `config.json`:
 
@@ -291,14 +288,13 @@ Ejemplo de `config.json`:
   "paused": false,
   "startWithWindows": false,
   "notifications": false,
-  "machineName": "AutoStatus",
   "devMode": false,
   "language": "es"
 }
 ```
 
-`machineName` es el nombre que reporta la sesión a Steam (visible para el propio usuario en
-sus dispositivos, no para los amigos).
+`machineName` ya no existe: la app no reporta una máquina propia; usa la sesión normal del
+cliente de Steam.
 
 `language` (`"es"` | `"en"`) fija el idioma de la interfaz, la bandeja, el tooltip y las
 notificaciones. Si falta (configs antiguas o primer arranque), se detecta del idioma de
@@ -306,22 +302,15 @@ Windows (es → Español, resto → English) y se persiste en el primer guardado
 
 ### 4.7 Empaquetado
 
-- **Sidecar**: esbuild bundlea el TS → `sidecar/dist/sidecar.cjs` (+ `system.pem`, que
-  `steam-crypto` lee relativo a `__dirname`; ambos los produce `sidecar/scripts/postbuild.mjs`).
-- **Runtime de Node**: la app instalada ejecuta el sidecar con un `node.exe` oficial
-  (v24.12.0 win-x64) que descarga `scripts/fetch-node-runtime.mjs` a `src-tauri/runtime/`
-  (verifica SHA256 contra nodejs.org; la carpeta está ignorada por git). En desarrollo se
-  usa el `node` del sistema.
-- **Shell**: `tauri build` con target **NSIS** (instalador `.exe`, instalación por
-  usuario sin admin, idiomas español/inglés). `bundle.resources` de `tauri.conf.json`
-  empaqueta `runtime/node.exe`, `sidecar/sidecar.cjs`, `sidecar/system.pem` y
-  `sidecar/node_modules/lzma/*` (steam-user lo exige en tiempo de ejecución y esbuild no
-  puede empaquetarlo por usar `require()` dinámico). `main.rs` además limpia el prefijo
-  extendido `\\?\` con que Tauri devuelve las rutas canonicalizadas, porque Node no lo
-  resuelve como argumento. Sin firma de código → Windows SmartScreen
-  avisará en la primera ejecución ("Editor desconocido" → Más información → Ejecutar de
-  todas formas). Actualizaciones manuales (reinstalar; los datos de `Documents` se
-  conservan).
+- **Núcleo**: Rust compilado dentro del ejecutable (release optimizado). Ya no hay sidecar,
+  `runtime/node.exe`, `bundle.resources` ni bundles intermedios.
+- **Instalador**: `tauri build` con target **NSIS** (instalador `.exe`, instalación por
+  usuario sin admin, idiomas español/inglés). `tauri.conf.json` no declara
+  `bundle.resources`. Tamaño medido: **2,49 MB**; disco instalado ≈ **12 MB** (ejecutable
+  ~10,7 MB + desinstalador/atajos), sin contar WebView2, que es del sistema. Sin firma de
+  código → Windows SmartScreen avisará en la primera ejecución ("Editor desconocido" → Más
+  información → Ejecutar de todas formas). Actualizaciones manuales (reinstalar; los datos de
+  `Documents` se conservan).
 - **WebView2**: ya viene preinstalado en Windows 10/11 (runtime de Edge); el instalador
   solo descarga el bootstrapper si faltara.
 - **Releases**: tag `vX.Y.Z` → workflow `.github/workflows/release.yml` (GitHub Actions)
@@ -332,18 +321,18 @@ Windows (es → Español, resto → English) y se persiste en el primer guardado
 
 ### 4.8 Presupuesto de recursos
 
-Medido durante el desarrollo (puede variar ligeramente):
+Mediciones y estimaciones durante el desarrollo (pueden variar):
 
-| Estado | RAM medida |
+| Estado | RAM |
 |---|---|
-| Shell Tauri (proceso principal) | ~36 MB |
-| Sidecar Node + `steam-user` | ~100–120 MB |
-| Ventana abierta (procesos WebView2) | ~400 MB temporales, se liberan al destruirla |
+| App Tauri (proceso principal, release) | ~34–35 MB (medido en bandeja y con ventana; ~6,5 MB privados) |
+| Ventana abierta (procesos WebView2) | procesos temporales aparte, se liberan al destruirla |
 
-En reposo (ventana cerrada) queda shell + sidecar ≈ **140–160 MB**. En desarrollo hay
-procesos extra (vite, wrappers de npm, CLI de Tauri) que no existen en la app instalada.
-Electron fue descartado por mantener toda su pila (~150–250 MB) incluso minimizado.
-Disco instalado estimado: ~60–90 MB.
+En reposo (ventana cerrada) queda solo el proceso principal ≈ **35 MB**. Ya no hay sidecar
+Node (~51 MB), así que el total baja de ~85 MB a ~34 MB. En desarrollo hay procesos extra
+(vite, wrappers de npm, CLI de Tauri) que no existen en la app instalada. Electron fue
+descartado por mantener toda su pila (~150–250 MB) incluso minimizado. Instalador medido:
+**2,49 MB**; disco instalado ≈ **12 MB**, sin runtime de Node ni recursos extra.
 
 ### 4.9 Identidad visual (logo e iconos)
 
@@ -374,58 +363,64 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 
 ## 5. Limitaciones conocidas
 
-1. **PC apagado ⇒ sin cambio.** La app solo actúa si el PC está encendido con internet en
-   ese momento. Si se quisiera independencia del PC, el sidecar valdría tal cual en un
-   VPS/Raspberry.
-2. **No puede forzar Invisible** fuera de la ventana si otra sesión del usuario está
-   `Online` (cliente con estado Conectado, jugando, app móvil, web…). La app solo *añade*
-   presencia; el usuario debe mantener su cliente en Invisible como base.
-3. **Si el usuario está jugando**, según el estado de su cliente puede aparecer "jugando";
-   eso es comportamiento de Steam, ajeno a esta app.
-4. **Toolchain de desarrollo**: requiere Rust (rustup) + MSVC Build Tools (~2–3 GB la
-   primera vez), solo en la máquina de desarrollo. En la máquina final no hace falta nada
-   (Node va empaquetado en el sidecar y WebView2 ya está).
-5. **ToS:** automatizar la presencia de la propia cuenta es zona gris del Steam Subscriber
-   Agreement (cláusula de automatización), pero es práctica extendida y de riesgo bajo al
-   no interactuar con juegos/comunidad. Decisión y responsabilidad del usuario.
-6. Primer login requiere el código 2FA una vez. Si el token caduca (p. ej. PC apagado
-   >200 días), la app pedirá login otra vez (lo indicará en la UI y el log).
-7. **El cliente oficial de Steam puede recargar (y dejar vacía) su lista de amigos** cada vez
-   que la cuenta recibe una sesión nueva —comportamiento del propio cliente, verificado en
-   sus logs y con varias variantes de logon descartadas (renovación de token, sesión web,
-   `chat_mode`, `client_os_type`, `logonID`, peticiones de notificaciones…): cualquier
-   conexión de la app lo dispara y no es evitable desde la app—. También reinicia el estado
-   del chat web de la cuenta. La app mantiene el paquete de logon mínimo y minimiza las
-   (re)conexiones; recomendación de uso: **Iniciar con Windows**, para conectar antes de
-   abrir Steam. Si la lista queda vacía: alternar Invisible/Conectado o reiniciar el cliente
-   (cerrar y reabrir la pestaña de amigos no basta); la web se recupera con F5; con el tiempo
-   también se repuebla sola.
+1. **PC apagado ⇒ sin cambio.** La app solo actúa si el PC está encendido con Steam
+   ejecutándose en ese momento. Sin PC no hay cliente local que controlar.
+2. **Steam tiene que estar abierto y con sesión iniciada.** Si está cerrado, el usuario ya
+   está Offline y la app no puede cambiarlo; espera a que vuelva y aplica el horario.
+3. **Solo controla el cliente local.** Si otra sesión o dispositivo (app móvil, Steam Deck,
+   chat web) está `Online`, los amigos pueden verte Conectado aunque el PC esté Invisible o
+   cerrado. La app no puede cambiar esas otras sesiones.
+4. **El comando local no confirma el resultado.** Si Steam está en modo Offline, en la
+   pantalla de inicio de sesión, sin foco o corriendo como administrador, puede ignorar la
+   URL. La UI muestra el último comando enviado y el estado del proceso, no una garantía de
+   la presencia real; «Reaplicar» permite reintentar. El envío usa `ShellExecuteW` en un hilo
+   con timeout de 2 s: un shell lento no congela la app, pero tampoco confirma la entrega.
+5. **Toolchain de desarrollo**: requiere Node (solo para la UI/Vite) y Rust (rustup) + MSVC
+   Build Tools (~2–3 GB la primera vez), solo en la máquina de desarrollo. La máquina final
+   no necesita Node: el ejecutable es Rust y WebView2 ya está en Windows 10/11.
+6. **ToS:** automatizar la presencia de la propia cuenta es zona gris del Steam Subscriber
+   Agreement (cláusula de automatización). Esta versión elimina el patrón de logons y
+   reconexiones que podía resultar sospechoso, pero la decisión y responsabilidad siguen
+   siendo del usuario.
+7. **Los comandos `steam://friends/status/*` son una interfaz local de Steam**, usada por su
+   propio menú pero no una API pública con garantía. Una actualización del cliente podría
+   cambiarlos o dejar de atenderlos; en ese caso habría que ajustar `steam.rs`. El fallback
+   sería automatización de UI/CEF o solo recordatorios, y no se usará salvo que haga falta.
 
 ## 7. Cómo verificar que funciona
 
-1. `npm install` y `tauri dev`; abrir el panel desde la bandeja; primer login en el
-   formulario (pide 2FA una sola vez).
+1. `npm install` y `npm run dev`; abrir el panel desde la bandeja. No hay login: la cabecera
+   debe decir «Steam abierto» si el cliente está en marcha. `cargo test` debe pasar los
+   tests de config y horario.
 2. Usar "Forzar Conectado" y pedir a un amigo (o cuenta alt) que confirme que aparece
-   Conectado; luego "Forzar Invisible" y confirmar que aparece desconectado (con el cliente
-   de Steam del usuario en Invisible o cerrado).
-3. Dejar el modo automático y comprobar en el log/UI que los cambios ocurren a las 17:30
+   Conectado; luego "Forzar Invisible" y confirmar que deja de aparecer Conectado. Si otra
+   sesión está Online, ciérrala para aislar la prueba.
+3. Cerrar Steam y comprobar que el panel pasa a «Steam cerrado» y que no se envía nada.
+   Volver a abrirlo: tras unos segundos debe aplicar el estado deseado (reintentos a 10/40/90
+   s mientras el cliente inicia sesión). «Reaplicar ahora» debe forzar un nuevo envío.
+4. Dejar el modo automático y comprobar en el log/UI que los cambios ocurren a las 17:30
    y a la 01:00.
-4. Comprobar que al cerrar la ventana los procesos WebView2 desaparecen y el consumo en
-   reposo baja al rango esperado (~60–95 MB).
-5. Activar "Iniciar con Windows", reiniciar el PC y comprobar que arranca minimizada en
+5. Comprobar que al cerrar la ventana los procesos WebView2 desaparecen y el consumo en
+   reposo baja al rango esperado (~35 MB medido en release; puede variar en la app instalada).
+6. Activar "Iniciar con Windows", reiniciar el PC y comprobar que arranca minimizada en
    bandeja y aplica el estado correcto.
-6. Generar el instalador (`tauri build`), instalarlo y verificar que los datos de
-   `Documents\steam-auto-status\` se conservan y todo sigue funcionando.
-7. Cambiar el idioma en Ajustes › Idioma y comprobar que interfaz, bandeja (menú y tooltip)
+7. Generar el instalador (`npm run build`, ~2,5 MB), instalarlo y verificar que los datos de
+   `Documents\steam-auto-status\` se conservan y todo sigue funcionando. No debe quedar ningún
+   proceso `node.exe` ni carpeta `sidecar/` en la instalación.
+8. Si vienes de la versión antigua, comprobar que Ajustes › Cliente de Steam detecta los
+   restos (`auth.json`, `profile.json`, `steam-data/`), que la confirmación los borra y que
+   `config.json` y `logs/` se conservan. Revocar el token en Steam es un paso manual.
+9. Cambiar el idioma en Ajustes › Idioma y comprobar que interfaz, bandeja (menú y tooltip)
    y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
 
 ## 8. Entorno
 
 - Máquina: Windows (win32). Workspace: `C:\Users\Juanky\Documents\code\projects\steam-auto-status`
-- Node.js v24.12.0 · npm 11.6.2 · Python 3.12.10 · git 2.52.0
+- Node.js v24.12.0 · npm 11.6.2 · Python 3.12.10 · git 2.52.0 (Node solo para UI/build;
+  la app instalada no ejecuta Node)
 - GitHub CLI (`gh`) para la gestión del repositorio
 - Repositorio remoto: `steam-auto-status` (rama `main`); los datos de la app viven en
-  `Documents` y **nunca** en el repo (`.gitignore` excluye datos y token)
+  `Documents` y **nunca** en el repo (`.gitignore` excluye datos y restos de credenciales)
 - Toolchain de desarrollo instalada: rustup + MSVC Build Tools (ya operativos); la Tauri
   CLI llega con la devDependency `@tauri-apps/cli` (`npm run tauri`)
 

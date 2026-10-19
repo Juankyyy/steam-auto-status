@@ -1,5 +1,5 @@
 import { getVersion } from '@tauri-apps/api/app'
-import { formatClock, type Translate } from '@/lib/i18n'
+import { formatClock, formatClockAt, type Translate } from '@/lib/i18n'
 import { isTauri, type AppState, type Language } from '@/lib/tauri'
 
 /** Text copied by Settings › Data › "Copy diagnostics" (version, state snapshot, recent log). */
@@ -18,22 +18,31 @@ export async function buildDiagnostics(
 
   const out: string[] = [t('diag.title'), t('diag.version', { value: version })]
   if (state) {
+    const clientState = !state.steamRunning
+      ? t('steamClient.closed')
+      : state.steamStarting
+        ? t('steamClient.starting')
+        : t('steamClient.running')
     out.push(
       t('diag.dataDir', { value: state.dataDir }),
-      t('diag.connection', { conn: state.connection, phase: state.loginPhase }),
+      t('diag.steamClient', { state: clientState }),
       t('diag.presence', {
         persona: state.persona ?? '—',
         desired: state.desired,
         inWindow: state.inWindow,
         paused: state.paused,
       }),
-      t('diag.account', { name: state.account?.name ?? '—', steamID: state.account?.steamID ?? '—' }),
+      t('diag.lastApplied', {
+        value: state.lastAppliedAt
+          ? `${state.persona ?? '—'} · ${formatClockAt(state.lastAppliedAt, lang)}`
+          : t('diag.none'),
+      }),
       t('diag.schedule', {
         days: state.config.days.join(', '),
         from: formatClock(state.config.onlineFrom, lang),
         until: formatClock(state.config.onlineUntil, lang),
       }),
-      t('diag.lastError', { value: state.lastError?.message ?? t('diag.none') }),
+      t('diag.lastError', { value: state.lastApplyError ?? t('diag.none') }),
     )
   } else {
     out.push(t('diag.noState'))

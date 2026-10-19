@@ -5,11 +5,11 @@ import { cmd, type Language } from '@/lib/tauri'
 
 /** Everything a module needs to render in the active language. */
 export interface I18nValue {
-  /** Active language: from config.json once the sidecar state arrives, detected before that. */
+  /** Active language: from config.json once the core state arrives, detected before that. */
   lang: Language
   /** Looks up a key and replaces its `{param}` placeholders. */
   t: Translate
-  /** Switches the app language (persisted through the sidecar config). */
+  /** Switches the app language (persisted through the core config). */
   setLanguage: (lang: Language) => void
 }
 

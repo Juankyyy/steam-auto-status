@@ -19,8 +19,6 @@ function I18nProvider({ children }: { children: ReactNode }) {
 export default function App() {
   const [state, setState] = useState<AppState | null>(null)
   const [logs, setLogs] = useState<string[]>([])
-  const [needLogin, setNeedLogin] = useState(false)
-  const [loginReason, setLoginReason] = useState<string | null>(null)
 
   useEffect(() => {
     let disposed = false
@@ -34,18 +32,12 @@ export default function App() {
             if (disposed) return
             if (msg.type === 'event') {
               if (msg.event === 'state') {
-                const s = msg.data as AppState
-                setState(s)
-                if (s.connection === 'connected') setNeedLogin(false)
+                setState(msg.data as AppState)
               } else if (msg.event === 'log') {
                 const line = (msg.data as { line?: string } | undefined)?.line
                 if (line) setLogs((prev) => [...prev.slice(-400), line])
               } else if (msg.event === 'logsCleared') {
                 setLogs([])
-              } else if (msg.event === 'authRequired') {
-                const d = msg.data as { reason?: string } | undefined
-                setNeedLogin(true)
-                setLoginReason(d?.reason ?? null)
               }
             } else if (msg.type === 'res') {
               const lines = (msg.result as { lines?: string[] } | undefined)?.lines
@@ -78,10 +70,7 @@ export default function App() {
   }, [])
 
   // Shared with every module through the app context (see lib/app-context.ts)
-  const appData = useMemo<AppContextValue>(
-    () => ({ state, logs, needLogin, loginReason }),
-    [state, logs, needLogin, loginReason],
-  )
+  const appData = useMemo<AppContextValue>(() => ({ state, logs }), [state, logs])
 
   return (
     <TooltipProvider>

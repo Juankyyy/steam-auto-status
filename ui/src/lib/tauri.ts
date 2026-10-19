@@ -2,14 +2,6 @@ import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
 
 export type Persona = 'online' | 'invisible'
-export type LoginPhase =
-  | 'idle'
-  | 'connecting'
-  | 'awaiting_guard'
-  | 'awaiting_qr'
-  | 'awaiting_approval'
-  | 'qr_expired'
-export type ConnectionState = 'connected' | 'connecting' | 'disconnected'
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 export type Language = 'es' | 'en'
 
@@ -20,31 +12,33 @@ export interface Config {
   paused: boolean
   startWithWindows: boolean
   notifications: boolean
-  machineName: string
   devMode: boolean
   language: Language
 }
 
 export interface AppState {
-  connection: ConnectionState
-  loginPhase: LoginPhase
-  qrDataUrl: string | null
+  /** The official Steam client process is running. */
+  steamRunning: boolean
+  /** The client just started; the first status commands are being retried. */
+  steamStarting: boolean
+  /** Last presence successfully sent to the client (null until the first send). */
   persona: Persona | null
   desired: Persona
   inWindow: boolean
   paused: boolean
   forced: { persona: Persona; until: number } | null
-  authPresent: boolean
-  account: { steamID: string; name: string | null; avatarUrl: string | null } | null
+  lastAppliedAt: number | null
+  lastApplyError: string | null
+  /** Files from the old login-based version are still in the data folder. */
+  legacyDataPresent: boolean
   nextTransition: { at: number; to: Persona } | null
   config: Config
-  lastError: { message: string; eresult?: number } | null
-  guardNeeded: { domain: string | null; lastCodeWrong: boolean } | null
   tooltip: string
   nowMs: number
   dataDir: string
 }
 
+/** Event payload emitted by the Rust core (`sidecar-message` is a compatibility name). */
 export interface SidecarMessage {
   type: 'event' | 'res'
   event?: string
@@ -56,7 +50,7 @@ export interface SidecarMessage {
 
 export const isTauri = typeof window !== 'undefined' && '__TAURI_INTERNALS__' in window
 
-/** Sends a command to the sidecar (fire-and-forget; state arrives via events). */
+/** Sends a command to the Rust core (fire-and-forget; state arrives via events). */
 export async function cmd(method: string, params: Record<string, unknown> = {}): Promise<void> {
   if (!isTauri) return
   await invoke('sidecar_command', { method, params })
@@ -80,9 +74,14 @@ export async function setAutostart(enable: boolean): Promise<void> {
   if (isTauri) await invoke('set_autostart', { enable })
 }
 
-/** Opens the app data folder (config, token, logs) in the system file manager. */
+/** Opens the app data folder (config, logs) in the system file manager. */
 export async function openDataFolder(): Promise<void> {
   if (isTauri) await invoke('open_data_folder')
+}
+
+/** Asks Windows to open the Steam client (or focus it if it is already running). */
+export async function openSteam(): Promise<void> {
+  if (isTauri) await invoke('open_steam')
 }
 
 /** Opens an external http/https link in the default browser. */

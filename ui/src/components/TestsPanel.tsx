@@ -14,7 +14,7 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
     if (el) el.scrollTop = el.scrollHeight
   }, [logs])
 
-  const disabled = state?.connection !== 'connected'
+  const disabled = !state?.steamRunning || state?.steamStarting
 
   return (
     <Card className="flex flex-col">
@@ -56,6 +56,9 @@ export function TestsPanel({ state, logs }: { state: AppState | null; logs: stri
               {t('dev.cancelForce')}
             </Button>
           )}
+          <Button size="sm" variant="ghost" disabled={disabled} onClick={() => void cmd('reapply')}>
+            {t('dev.reapply')}
+          </Button>
         </div>
 
         <div

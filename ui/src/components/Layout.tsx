@@ -1,9 +1,7 @@
-import { LayoutDashboard, LogIn, Settings, Terminal } from 'lucide-react'
-import { Link, NavLink, Outlet } from 'react-router'
+import { LayoutDashboard, Settings, Terminal } from 'lucide-react'
+import { NavLink, Outlet } from 'react-router'
 import logoUrl from '@/assets/logo.svg'
-import { AccountChip } from '@/components/AccountChip'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
 import { useAppContext } from '@/lib/app-context'
 import { useI18n } from '@/lib/i18n-context'
 import type { AppState } from '@/lib/tauri'
@@ -18,48 +16,28 @@ const NAV_ITEMS = [
 /** Extra tab, only listed while developer mode is enabled in settings. */
 const DEV_NAV_ITEM = { to: '/dev', key: 'nav.dev', icon: Terminal, end: false } as const
 
-/** Steam connection badge shown while there is no account chip to show. */
-function ConnectionBadge({ state }: { state: AppState | null }) {
+/** Steam client badge: the app no longer has an account of its own. */
+function SteamClientBadge({ state }: { state: AppState | null }) {
   const { t } = useI18n()
   if (!state) return <Badge variant="outline">{t('common.loading')}</Badge>
-  switch (state.connection) {
-    case 'connected':
-      return (
-        <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
-          {t('connection.connected')}
-        </Badge>
-      )
-    case 'connecting':
-      return (
-        <Badge variant="outline" className="border-amber-500/40 text-amber-400">
-          {t('common.connecting')}
-        </Badge>
-      )
-    default:
-      return (
-        <Badge variant="outline" className="border-red-500/40 text-red-400">
-          {t('common.offline')}
-        </Badge>
-      )
+  if (!state.steamRunning) {
+    return (
+      <Badge variant="outline" className="border-red-500/40 text-red-400">
+        {t('steamClient.closed')}
+      </Badge>
+    )
   }
-}
-
-/** Header right side: account chip, connection badge, or a login shortcut when no session exists. */
-function AccountArea({ state }: { state: AppState | null }) {
-  const { t } = useI18n()
-  if (state?.account) return <AccountChip state={state} />
-  // Loading, connecting, or with a saved session: the connection badge tells the story
-  if (!state || state.authPresent || state.connection !== 'disconnected' || state.loginPhase !== 'idle') {
-    return <ConnectionBadge state={state} />
+  if (state.steamStarting) {
+    return (
+      <Badge variant="outline" className="border-amber-500/40 text-amber-400">
+        {t('steamClient.starting')}
+      </Badge>
+    )
   }
-  // No session and nothing in progress: offer the login (the panel lives in the dashboard)
   return (
-    <Button asChild size="sm" variant="outline">
-      <Link to="/">
-        <LogIn className="size-4" />
-        {t('nav.signIn')}
-      </Link>
-    </Button>
+    <Badge variant="outline" className="border-emerald-500/40 text-emerald-400">
+      {t('steamClient.running')}
+    </Badge>
   )
 }
 
@@ -102,7 +80,7 @@ export function Layout() {
         </nav>
 
         <div className="ml-auto">
-          <AccountArea state={state} />
+          <SteamClientBadge state={state} />
         </div>
       </header>
 

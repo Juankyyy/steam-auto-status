@@ -12,30 +12,20 @@ import type { Language } from '@/lib/tauri'
 const es = {
   // ---------------------------------------------------------------- common
   'common.loading': 'Cargando…',
-  'common.connecting': 'Conectando…',
-  'common.offline': 'Sin conexión',
   'common.online': 'Conectado',
   'common.invisible': 'Invisible',
   'common.noSchedule': 'Sin programación',
   'common.cancel': 'Cancelar',
-
-  'connection.connected': 'Conectado a Steam',
 
   // ---------------------------------------------------------------- header
   'nav.dashboard': 'Panel de control',
   'nav.settings': 'Ajustes',
   'nav.dev': 'Desarrollador',
   'nav.label': 'Módulos',
-  'nav.signIn': 'Iniciar sesión',
 
   // ---------------------------------------------------------------- dashboard › status
   'status.scheduleSummary.one': 'Horario: 1 día · {from}–{until}',
   'status.scheduleSummary.many': 'Horario: {count} días · {from}–{until}',
-  'status.noSession': 'Sin sesión',
-  'status.activeAs': 'Sesión activa como {name}',
-  'status.activeSession': 'Sesión activa en Steam',
-  'status.connectingSteam': 'Conectando con Steam…',
-  'status.noSteam': 'Sin conexión con Steam',
   'status.nextChange': 'Próximo cambio',
   'status.nextAt': '{state} a las {time}',
   'status.inDuration': 'en {duration}',
@@ -44,13 +34,19 @@ const es = {
   'status.inWindow': 'Dentro de la franja',
   'status.outOfWindow': 'Fuera de la franja',
   'status.forcedUntil': 'Forzado {state} hasta las {time}',
-  'status.connError': 'Error de conexión con Steam',
-  'status.retry': 'Reintentar',
+  'status.waiting': 'Esperando a Steam',
+  'status.pausedTitle': 'En pausa',
+  'status.pausedBody': 'La app no cambiará tu estado mientras esté en pausa.',
+  'status.steamClosedTitle': 'Steam no está abierto',
+  'status.steamClosedBody': 'Abre Steam para que la app pueda cambiar tu estado.',
+  'status.steamStarting': 'Steam está iniciando; el estado se aplicará en unos segundos.',
+  'status.lastApplied': 'Último cambio: {state} a las {time}',
+  'status.applyError': 'No se pudo cambiar el estado',
 
   // ---------------------------------------------------------------- dashboard › schedule card
   'schedule.title': 'Programación',
   'schedule.quickLabel': 'Automatización activa',
-  'schedule.quickHint': 'Al pausarla, tu sesión pasa a Invisible y no cambia sola.',
+  'schedule.quickHint': 'Al pausarla, la app deja de cambiar el estado; tu estado actual se queda como está.',
   'schedule.editInSettings': 'Editar en Ajustes',
 
   // ---------------------------------------------------------------- schedule summaries (lib/schedule.ts)
@@ -71,44 +67,6 @@ const es = {
   'day.sat': 'Sáb',
   'day.sun': 'Dom',
 
-  // ---------------------------------------------------------------- login panel
-  'login.title': 'Conectar con Steam',
-  'login.description':
-    'Elige el método: código QR con la app móvil (recomendado) o tu usuario y contraseña.',
-  'login.tabQr': 'Código QR',
-  'login.tabCreds': 'Usuario y contraseña',
-  'login.reasonTitle': 'Se necesita iniciar sesión',
-  'login.errorTitle': 'Error',
-  'login.qrAlt': 'Código QR de inicio de sesión de Steam',
-  'login.qrScanned': 'Código escaneado ✓ — confirma la solicitud en la app móvil de Steam.',
-  'login.qrApproved': 'Aprobado ✓ — conectando con Steam…',
-  'login.qrExpired': 'El código caducó. Genera uno nuevo.',
-  'login.qrHint': 'Abre la app de Steam en tu móvil, escanea el código y confirma la solicitud.',
-  'login.qrExpiredBox': 'El código caducó',
-  'login.generating': 'Generando código…',
-  'login.generateAnother': 'Generar otro código',
-  'login.guardEmail': 'Steam envió un código a tu correo (termina en {domain}).',
-  'login.guardMobile':
-    'Introduce el código actual que muestra la app móvil de Steam (sección Steam Guard), o aprueba la solicitud si te aparece en el móvil.',
-  'login.wrongCodeTitle': 'Código incorrecto',
-  'login.wrongCodeBody':
-    'Espera ~30 s a que la app genere un código nuevo e inténtalo otra vez.',
-  'login.codeLabel': 'Código',
-  'login.checking': 'Comprobando…',
-  'login.submit': 'Enviar',
-  'login.approveTitle': 'Aprueba el inicio de sesión',
-  'login.approveBody':
-    'Steam te está pidiendo confirmación. Abre la app móvil de Steam y toca «Aceptar» en la solicitud de inicio de sesión; esta ventana se conectará sola.',
-  'login.accountLabel': 'Usuario de Steam',
-  'login.passwordLabel': 'Contraseña',
-  'login.credsHint':
-    'Las credenciales se envían directamente a Steam; la contraseña no se guarda (solo un token de sesión).',
-  'login.submitting': 'Iniciando sesión…',
-  'login.signIn': 'Iniciar sesión',
-
-  // ---------------------------------------------------------------- account chip
-  'account.aria': 'Cuenta de Steam: {name}',
-
   // ---------------------------------------------------------------- developer › tests
   'dev.title': 'Pruebas y registro',
   'dev.description':
@@ -116,6 +74,7 @@ const es = {
   'dev.forceOnline': 'Conectado {minutes} min',
   'dev.forceInvisible': 'Invisible {minutes} min',
   'dev.cancelForce': 'Cancelar forzado',
+  'dev.reapply': 'Reaplicar ahora',
   'dev.noLogs': 'Sin registros todavía…',
 
   // ---------------------------------------------------------------- settings › schedule
@@ -129,21 +88,28 @@ const es = {
     'La hora de inicio y la de fin coinciden: ahora mismo no habría ninguna franja Conectado.',
   'settings.schedule.restore': 'Restaurar por defecto',
 
-  // ---------------------------------------------------------------- settings › account
-  'settings.account.title': 'Cuenta de Steam',
-  'settings.account.description': 'Sesión que reporta tu presencia en Steam.',
-  'settings.account.saved': 'Sesión guardada',
-  'settings.account.none': 'Sin cuenta conectada',
-  'settings.account.reconnect': 'Reconectar',
-  'settings.account.machine': 'Nombre de máquina',
-  'settings.account.machineTooltip':
-    'Nombre que reporta esta sesión a Steam. Visible solo para ti en tus dispositivos.',
-  'settings.account.machineHint': 'Se aplica en la próxima conexión con Steam.',
-  'settings.account.logoutHint':
-    'Cerrar sesión elimina el token guardado; para volver a conectarte tendrás que iniciar sesión de nuevo.',
-  'settings.account.logout': 'Cerrar sesión',
-  'settings.account.logoutConfirm':
-    '¿Cerrar sesión de Steam? Se borrará el token guardado y tendrás que iniciar sesión de nuevo.',
+  // ---------------------------------------------------------------- settings › steam client
+  'steamClient.title': 'Cliente de Steam',
+  'steamClient.description':
+    'La app no inicia sesión: envía al cliente de Steam el mismo cambio que el menú Amigos → Estado.',
+  'steamClient.requirement': 'Requiere Steam abierto y con sesión iniciada',
+  'steamClient.running': 'Steam abierto',
+  'steamClient.starting': 'Steam iniciando…',
+  'steamClient.closed': 'Steam cerrado',
+  'steamClient.open': 'Abrir Steam',
+  'steamClient.reapply': 'Reaplicar ahora',
+  'steamClient.lastApplied': 'Último estado aplicado',
+  'steamClient.lastAppliedValue': '{state} a las {time}',
+  'steamClient.never': 'Todavía no se ha aplicado',
+  'steamClient.legacyTitle': 'Credenciales antiguas',
+  'steamClient.legacyDescription':
+    'Esta versión ya no usa tu cuenta. Puedes borrar los datos de la sesión anterior.',
+  'steamClient.legacyHint':
+    'Borrar los archivos no invalida el token: revócalo también en Steam con «Gestionar dispositivos de Steam».',
+  'steamClient.legacyDelete': 'Borrar datos antiguos',
+  'steamClient.legacyConfirm':
+    'Se borrarán auth.json, profile.json y steam-data. No se puede deshacer. ¿Continuar?',
+  'steamClient.revoke': 'Gestionar dispositivos de Steam',
 
   // ---------------------------------------------------------------- settings › app
   'settings.app.title': 'Aplicación',
@@ -163,8 +129,7 @@ const es = {
 
   // ---------------------------------------------------------------- settings › data
   'settings.data.title': 'Datos y registros',
-  'settings.data.description':
-    'Configuración, token y registro se guardan en local, en esta carpeta.',
+  'settings.data.description': 'La configuración y el registro se guardan en local, en esta carpeta.',
   'settings.data.folder': 'Carpeta de datos',
   'settings.data.open': 'Abrir carpeta',
   'settings.data.copy': 'Copiar diagnóstico',
@@ -173,13 +138,13 @@ const es = {
   'settings.data.clearConfirm':
     '¿Vaciar el registro? Se borrarán las líneas actuales de status.log.',
   'settings.data.hint':
-    'El diagnóstico incluye la versión, el estado de la conexión y las últimas líneas del registro: útil si abres un incidente en GitHub. Desinstalar la app no borra esta carpeta.',
+    'El diagnóstico incluye la versión, el estado del cliente y las últimas líneas del registro: útil si abres un incidente en GitHub. Desinstalar la app no borra esta carpeta.',
   'settings.data.copyError': 'No se pudo copiar: {error}',
 
   // ---------------------------------------------------------------- settings › about
   'settings.about.title': 'Acerca de',
   'settings.about.blurb':
-    'Cambia tu presencia de Steam según el horario configurado. Nada sale de tu equipo salvo lo necesario para hablar con Steam.',
+    'Cambia tu presencia de Steam según el horario configurado. La app no inicia sesión: controla el cliente que ya tienes abierto.',
   'settings.about.repo': 'Repositorio',
   'settings.about.latest': 'Última versión',
   'settings.about.report': 'Reportar un problema',
@@ -197,10 +162,10 @@ const es = {
   'diag.version': 'Versión: {value}',
   'diag.unknown': 'desconocida',
   'diag.dataDir': 'Carpeta de datos: {value}',
-  'diag.connection': 'Conexión: {conn} · fase: {phase}',
+  'diag.steamClient': 'Cliente de Steam: {state}',
   'diag.presence':
     'Presencia: {persona} (deseada: {desired}) · en franja: {inWindow} · pausada: {paused}',
-  'diag.account': 'Cuenta: {name} ({steamID})',
+  'diag.lastApplied': 'Último estado aplicado: {value}',
   'diag.schedule': 'Horario: {days} {from}→{until}',
   'diag.lastError': 'Último error: {value}',
   'diag.none': 'ninguno',
@@ -211,28 +176,18 @@ const es = {
 /** The same key set as `es`, in English. A missing or unknown key fails the build. */
 const en: Record<keyof typeof es, string> = {
   'common.loading': 'Loading…',
-  'common.connecting': 'Connecting…',
-  'common.offline': 'Offline',
   'common.online': 'Online',
   'common.invisible': 'Invisible',
   'common.noSchedule': 'No schedule',
   'common.cancel': 'Cancel',
 
-  'connection.connected': 'Connected to Steam',
-
   'nav.dashboard': 'Dashboard',
   'nav.settings': 'Settings',
   'nav.dev': 'Developer',
   'nav.label': 'Modules',
-  'nav.signIn': 'Sign in',
 
   'status.scheduleSummary.one': 'Schedule: 1 day · {from}–{until}',
   'status.scheduleSummary.many': 'Schedule: {count} days · {from}–{until}',
-  'status.noSession': 'No session',
-  'status.activeAs': 'Signed in as {name}',
-  'status.activeSession': 'Active session on Steam',
-  'status.connectingSteam': 'Connecting to Steam…',
-  'status.noSteam': 'No connection to Steam',
   'status.nextChange': 'Next change',
   'status.nextAt': '{state} at {time}',
   'status.inDuration': 'in {duration}',
@@ -241,12 +196,18 @@ const en: Record<keyof typeof es, string> = {
   'status.inWindow': 'Within schedule',
   'status.outOfWindow': 'Outside schedule',
   'status.forcedUntil': 'Forced {state} until {time}',
-  'status.connError': 'Steam connection error',
-  'status.retry': 'Retry',
+  'status.waiting': 'Waiting for Steam',
+  'status.pausedTitle': 'Paused',
+  'status.pausedBody': "The app won't change your status while paused.",
+  'status.steamClosedTitle': 'Steam is not running',
+  'status.steamClosedBody': 'Open Steam so the app can change your status.',
+  'status.steamStarting': 'Steam is starting; the status will be applied in a few seconds.',
+  'status.lastApplied': 'Last change: {state} at {time}',
+  'status.applyError': 'Could not change the status',
 
   'schedule.title': 'Schedule',
   'schedule.quickLabel': 'Automation active',
-  'schedule.quickHint': 'When paused, your session goes Invisible and stops changing on its own.',
+  'schedule.quickHint': 'When paused, the app stops changing your status; it stays as it is.',
   'schedule.editInSettings': 'Edit in Settings',
 
   'schedule.noWindow': 'no window',
@@ -266,47 +227,13 @@ const en: Record<keyof typeof es, string> = {
   'day.sat': 'Sat',
   'day.sun': 'Sun',
 
-  'login.title': 'Connect to Steam',
-  'login.description':
-    'Choose a method: QR code with the mobile app (recommended), or your username and password.',
-  'login.tabQr': 'QR code',
-  'login.tabCreds': 'Username & password',
-  'login.reasonTitle': 'Sign-in required',
-  'login.errorTitle': 'Error',
-  'login.qrAlt': 'Steam sign-in QR code',
-  'login.qrScanned': 'Code scanned ✓ — confirm the request in the Steam mobile app.',
-  'login.qrApproved': 'Approved ✓ — connecting to Steam…',
-  'login.qrExpired': 'The code expired. Generate a new one.',
-  'login.qrHint': 'Open the Steam app on your phone, scan the code and confirm the request.',
-  'login.qrExpiredBox': 'The code expired',
-  'login.generating': 'Generating code…',
-  'login.generateAnother': 'Generate another code',
-  'login.guardEmail': 'Steam emailed a code to you (ends in {domain}).',
-  'login.guardMobile':
-    'Enter the current code shown in the Steam mobile app (Steam Guard section), or approve the request if it appears on your phone.',
-  'login.wrongCodeTitle': 'Wrong code',
-  'login.wrongCodeBody': 'Wait ~30 s for the app to generate a new code, then try again.',
-  'login.codeLabel': 'Code',
-  'login.checking': 'Checking…',
-  'login.submit': 'Submit',
-  'login.approveTitle': 'Approve the sign-in',
-  'login.approveBody':
-    'Steam is asking for confirmation. Open the Steam mobile app and tap "Accept" on the sign-in request; this window will connect by itself.',
-  'login.accountLabel': 'Steam account name',
-  'login.passwordLabel': 'Password',
-  'login.credsHint':
-    'Credentials are sent straight to Steam; the password is never stored (only a session token).',
-  'login.submitting': 'Signing in…',
-  'login.signIn': 'Sign in',
-
-  'account.aria': 'Steam account: {name}',
-
   'dev.title': 'Tests & log',
   'dev.description':
     'Force a temporary state to check how your friends see you; it returns to the schedule on its own when done.',
   'dev.forceOnline': 'Online {minutes} min',
   'dev.forceInvisible': 'Invisible {minutes} min',
   'dev.cancelForce': 'Cancel override',
+  'dev.reapply': 'Reapply now',
   'dev.noLogs': 'No log entries yet…',
 
   'settings.schedule.title': 'Schedule',
@@ -319,20 +246,27 @@ const en: Record<keyof typeof es, string> = {
     'Start and end time are the same: there would be no Online window right now.',
   'settings.schedule.restore': 'Restore defaults',
 
-  'settings.account.title': 'Steam account',
-  'settings.account.description': 'The session that reports your presence on Steam.',
-  'settings.account.saved': 'Saved session',
-  'settings.account.none': 'No account connected',
-  'settings.account.reconnect': 'Reconnect',
-  'settings.account.machine': 'Machine name',
-  'settings.account.machineTooltip':
-    'The name this session reports to Steam. Visible only to you, on your devices.',
-  'settings.account.machineHint': 'Applies on the next Steam connection.',
-  'settings.account.logoutHint':
-    'Signing out deletes the saved token; you will have to sign in again to reconnect.',
-  'settings.account.logout': 'Sign out',
-  'settings.account.logoutConfirm':
-    'Sign out of Steam? The saved token will be deleted and you will have to sign in again.',
+  'steamClient.title': 'Steam client',
+  'steamClient.description':
+    'The app does not sign in: it sends the Steam client the same change as the Friends → Status menu.',
+  'steamClient.requirement': 'Requires Steam open and signed in',
+  'steamClient.running': 'Steam open',
+  'steamClient.starting': 'Steam starting…',
+  'steamClient.closed': 'Steam closed',
+  'steamClient.open': 'Open Steam',
+  'steamClient.reapply': 'Reapply now',
+  'steamClient.lastApplied': 'Last applied state',
+  'steamClient.lastAppliedValue': '{state} at {time}',
+  'steamClient.never': 'Not applied yet',
+  'steamClient.legacyTitle': 'Old credentials',
+  'steamClient.legacyDescription':
+    'This version no longer uses your account. You can delete the data from the previous session.',
+  'steamClient.legacyHint':
+    'Deleting the files does not invalidate the token: also revoke it in Steam with "Manage Steam devices".',
+  'steamClient.legacyDelete': 'Delete old data',
+  'steamClient.legacyConfirm':
+    'auth.json, profile.json and steam-data will be deleted. This cannot be undone. Continue?',
+  'steamClient.revoke': 'Manage Steam devices',
 
   'settings.app.title': 'Application',
   'settings.app.description': 'Windows startup, notifications and internal tools.',
@@ -349,7 +283,7 @@ const en: Record<keyof typeof es, string> = {
     'App language. Changes instantly across the interface, the tray and notifications.',
 
   'settings.data.title': 'Data & logs',
-  'settings.data.description': 'Settings, token and log are stored locally, in this folder.',
+  'settings.data.description': 'Settings and log are stored locally, in this folder.',
   'settings.data.folder': 'Data folder',
   'settings.data.open': 'Open folder',
   'settings.data.copy': 'Copy diagnostics',
@@ -357,12 +291,12 @@ const en: Record<keyof typeof es, string> = {
   'settings.data.clear': 'Clear log',
   'settings.data.clearConfirm': 'Clear the log? The current status.log lines will be deleted.',
   'settings.data.hint':
-    'The diagnostics include the version, connection state and the latest log lines: useful when you open a GitHub issue. Uninstalling the app does not delete this folder.',
+    'The diagnostics include the version, the client state and the latest log lines: useful when you open a GitHub issue. Uninstalling the app does not delete this folder.',
   'settings.data.copyError': 'Could not copy: {error}',
 
   'settings.about.title': 'About',
   'settings.about.blurb':
-    'Switches your Steam presence on the configured schedule. Nothing leaves your machine except what is needed to talk to Steam.',
+    'Switches your Steam presence on the configured schedule. The app does not sign in: it controls the client you already have open.',
   'settings.about.repo': 'Repository',
   'settings.about.latest': 'Latest release',
   'settings.about.report': 'Report an issue',
@@ -378,9 +312,9 @@ const en: Record<keyof typeof es, string> = {
   'diag.version': 'Version: {value}',
   'diag.unknown': 'unknown',
   'diag.dataDir': 'Data folder: {value}',
-  'diag.connection': 'Connection: {conn} · phase: {phase}',
+  'diag.steamClient': 'Steam client: {state}',
   'diag.presence': 'Presence: {persona} (desired: {desired}) · in window: {inWindow} · paused: {paused}',
-  'diag.account': 'Account: {name} ({steamID})',
+  'diag.lastApplied': 'Last applied state: {value}',
   'diag.schedule': 'Schedule: {days} {from}→{until}',
   'diag.lastError': 'Last error: {value}',
   'diag.none': 'none',
@@ -411,7 +345,7 @@ export function translate(
   return s
 }
 
-/** Best-effort guess for the first frames, before the sidecar reports the saved language. */
+/** Best-effort guess for the first frames, before the core reports the saved language. */
 export function detectLanguage(): Language {
   if (typeof navigator === 'undefined') return 'es'
   return navigator.language.toLowerCase().startsWith('es') ? 'es' : 'en'

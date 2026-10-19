@@ -29,7 +29,7 @@ export function ScheduleCard({ state }: { state: AppState | null }) {
             id="quick-pause"
             checked={cfg ? !cfg.paused : false}
             disabled={!cfg}
-            onCheckedChange={(checked) => void cmd('setConfig', { paused: !checked })}
+            onCheckedChange={(checked) => void cmd(checked ? 'resume' : 'pause')}
           />
         </div>
 

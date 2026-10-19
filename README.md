@@ -33,21 +33,24 @@ to go invisible before bed.
 - **Schedule-driven presence**: Online inside your weekly window and Invisible outside it.
   Pick the days and the start/end time, including overnight windows (default: Monday–Friday,
   17:30 → 01:00).
-- **Keeps working with Steam closed**: The app runs its own background session, so your
-  status changes on time whether or not the client is open. It reconnects on its own after
-  network drops, never launches games and never signs out the client you play with.
-- **Sign in once**: Scan a QR code with the Steam mobile app, or use username + password
-  with mobile confirmation. Only the refresh token is stored, locally.
+- **No login, no session**: The app doesn't sign in, store a token or create a second Steam
+  session. It asks the official client that is already open to change its own status, using
+  the same local commands as the Friends → Status menu.
+- **Your Steam client stays yours**: The app only switches Online/Invisible. It never
+  launches games, never signs the client out and never touches your credentials.
+- **Requires Steam open**: The status can only be applied while the Steam client is running
+  and signed in. If it is closed, you are already Offline; the app warns you and applies the
+  schedule as soon as Steam starts.
 - **Tray-first, panel when you want it**: Current status and next change at a glance,
   one-click overrides from the tray menu ("Online for 30 min", "Invisible now",
   pause/resume), and a settings window for schedule, startup and notifications. The tray
-  icon doubles as a status light: green online, grey invisible.
-- **Light on resources**: Around 140–160 MB at idle (shell + sidecar), and the WebView
-  processes are released when you close the window. Built to stay open 24/7.
+  icon doubles as a status light: green online, grey invisible/closed.
+- **Light on resources**: One small native shell; the WebView processes are released when you
+  close the window. Built to stay open 24/7.
 - **Spanish and English**: Switch language at runtime; the panel, tray menu, tooltip and
   notifications follow the same setting. On first run it matches your Windows language.
-- **Local by default**: Settings, token and logs live in one folder under `Documents`
-  (configurable from the panel). Nothing leaves your machine except the Steam connection.
+- **Local by default**: Settings and logs live in one folder under `Documents` (configurable
+  from the panel). The app needs no network: it only talks to the local Steam client.
 
 ## 🚀 Getting started
 
@@ -61,11 +64,10 @@ run it. Per-user install: no admin rights needed.
 > about an unknown publisher. Click **More info → Run anyway**. The full source is in this
 > repository, so you can inspect (or build) it yourself.
 
-### 2. Sign in
+### 2. Keep Steam open
 
-Open the panel from the tray icon (next to the clock) and scan the QR code with the Steam
-mobile app. Alternatively, log in with username + password — Steam will ask you to approve
-it from your phone.
+No login and no QR code. Start Steam normally and leave it running (the tray is enough).
+The app only needs the client open and signed in; it will switch Online/Invisible for you.
 
 ### 3. Forget about it
 
@@ -74,23 +76,32 @@ to adjust hours, weekdays, notifications or to pause the automation.
 
 ## ⚙️ How it works
 
-Steam doesn't store one single status: it combines the status of every session signed in
-with your account. If any of them is Online, your friends see you Online.
+Steam has no native schedule for presence, but its client understands local `steam://`
+commands. The app sends the same command the Friends → Status menu uses:
 
-Steam Auto Status simply holds one more session of its own in the background: an extra,
-invisible client that never launches anything and flips between Online and Invisible
-whenever your schedule says so.
+- `steam://friends/status/online`
+- `steam://friends/status/invisible`
 
-Your normal Steam client keeps whatever status you set (Invisible works great as a
-baseline), and the app never signs it out. Because it only uses Steam's own login and
-presence, it can't interfere with your games, your normal Steam client or VAC-protected
-sessions.
+There is no separate session, no refresh token and no password. The app checks that
+`steam.exe` is running, sends the command, and records what it sent. Outside your window it
+asks for Invisible (not Offline: Offline would sign you out of friends and chat). If Steam
+is closed, your status is already Offline; the app waits for the client and applies the
+schedule when it appears.
+
+The local command has no reply, so the app cannot read Steam's real presence. If you change
+your status by hand, it is not corrected until the next schedule transition, the next app or
+Steam start, or **Reapply now**; the app deliberately does not re-send the command every few
+seconds to fight manual changes.
 
 ## 🔐 Your data
 
-- Everything is stored **locally** in `Documents\steam-auto-status\` (config, login token,
-  logs), never in AppData. The folder is configurable from the settings panel.
-- Nothing is sent anywhere except Steam itself.
+- Everything is stored **locally** in `Documents\steam-auto-status\` (config and logs),
+  never in AppData. The folder is configurable from the settings panel.
+- The app stores **no credentials and no token** and needs no network connection.
+- If you used an older version, it may have left `auth.json`, `profile.json` and
+  `steam-data/` behind. This version never reads them; you can delete them from
+  **Settings › Steam client**. Deleting the files does not invalidate the old token, so
+  also revoke it in Steam (Manage Steam devices).
 - Uninstalling **keeps your data**; delete the folder manually if you want a clean slate.
 
 ## ❓ FAQ & troubleshooting
@@ -100,16 +111,15 @@ sessions.
 
 Check three things:
 
-1. **The app is running**: look for the tray icon.
-2. **The schedule covers the current time**: panel → Schedule (overnight windows included).
-3. **Your normal Steam client is set to Invisible**: the app only *adds* Online presence
-   during your window; it can't force Invisible while another session (your desktop client,
-   the mobile app, a game) is Online.
+1. **Steam is open and signed in**: the panel header should say "Steam open". If it says
+   "Steam closed", open Steam and wait a few seconds; the app applies the schedule when it
+   appears.
+2. **The app is running**: look for the tray icon.
+3. **The schedule covers the current time**: panel → Schedule (overnight windows included).
 
-To see the result, check your status on your
-[Steam profile page](https://steamcommunity.com/my/): the Friends & chat tab can show a
-stale or blank status after a reconnect. Live logs are in
-`Documents\steam-auto-status\logs\`.
+If another device is signed in and Online (the mobile app, a Steam Deck, the web chat),
+friends may still see you Online even when the desktop client is Invisible. The app can only
+control the local client. Live logs are in `Documents\steam-auto-status\logs\`.
 
 </details>
 
@@ -117,31 +127,25 @@ stale or blank status after a reconnect. Live logs are in
 <summary><strong>The panel stays loading, or something looks stuck</strong></summary>
 
 Close the app from the tray and open it again. If it persists, copy a diagnostic from
-**Settings › Data & logs › Copy diagnostics** (version, connection state and the latest log
+**Settings › Data & logs › Copy diagnostics** (version, client state and the latest log
 lines) and [open an issue](https://github.com/Juankyyy/steam-auto-status/issues) with it.
 
 </details>
 
 <details>
-<summary><strong>Steam's friends list looks empty after the app (re)connects</strong></summary>
+<summary><strong>Can it change my status while Steam is closed?</strong></summary>
 
-Steam's own client reloads (and can leave blank) the friends list whenever your account
-receives a new session, and the app's 24/7 session counts as one. It is a Steam client
-quirk: your client is never logged out, and the app keeps its logons to the bare minimum
-(one per start, plus retries with backoff after network drops).
-
-If the list looks empty: switch your status to Invisible and back to Online (this often
-refreshes it), or restart the Steam client. Closing and reopening the friends tab does not
-fix it. The web chat recovers with a page refresh, and the list also repopulates on its own
-over time. Tip: enable **Start with Windows** so the app connects before you open Steam and
-you won't normally see this.
+No. Without a session of its own, the app needs the official Steam client running. If Steam
+is closed you are already Offline; the app warns you and applies the schedule as soon as the
+client starts. This is the deliberate trade-off for not logging in or storing a token.
 
 </details>
 
 <details>
 <summary><strong>How do I switch Steam accounts?</strong></summary>
 
-**Settings › Steam account › Sign out**, then sign in again.
+Just switch accounts in Steam as usual. The app doesn't know or store the account; it always
+controls whichever account is signed into the local client.
 
 </details>
 
@@ -158,24 +162,29 @@ will come back on reboot.
 
 Download the new installer from the
 [latest release](https://github.com/Juankyyy/steam-auto-status/releases/latest) and run it
-on top of your current version: your config, token and logs are kept and you won't need to
-sign in again.
+on top of your current version: your config and logs are kept. If you come from a version
+that stored a Steam token, delete the old session files from **Settings › Steam client** and
+revoke the token in Steam (Manage Steam devices).
 
 </details>
 
 <details>
-<summary><strong>Does my PC need to stay on?</strong></summary>
+<summary><strong>Does my PC need to stay on? Does Steam?</strong></summary>
 
-Yes: the app must be running to update your status. Enable **Start with Windows** so it's
-always there.
+Yes to both: the app and the official Steam client must be running to update your status.
+Enable **Start with Windows** for the app, and Steam's own "Run Steam when my computer
+starts" option if you want the schedule to apply from boot.
 
 </details>
 
 <details>
 <summary><strong>Will this get me banned?</strong></summary>
 
-It doesn't touch games or inject into any process: it uses Steam's normal login and presence
-API (through the well-known `steam-user` library). There is nothing for VAC to look at.
+The app doesn't touch games or inject into any process. It uses the client's own local
+`steam://friends/status/*` commands, the same ones the Friends → Status menu uses, and it
+does not log in or create a second session. That removes the login pattern that can look
+suspicious to Steam, but automating your own status is still a grey area of Steam's terms:
+use it at your own risk.
 
 </details>
 
@@ -195,25 +204,26 @@ run the app follows your Windows language.
 
 | Folder | Contents |
 |---|---|
-| `src-tauri/` | Desktop shell (Rust/Tauri 2): tray, window, sidecar supervision |
-| `sidecar/` | Core (Node + `steam-user`): Steam session, schedule and data |
+| `src-tauri/` | Native app (Rust/Tauri 2): tray, window, schedule, config, logs and Steam client control |
 | `ui/` | Interface (React + TypeScript + Tailwind + shadcn/ui) |
 | `assets/` | Visual identity and the screenshots used in this README |
-| `scripts/` | Build helpers: pinned Node runtime, version bump, installer rename |
+| `scripts/` | Build helpers: version bump and installer rename |
 
 Requirements: Node.js 22 or newer and Rust (rustup) + MSVC Build Tools.
 
 | Command | What it does |
 |---|---|
-| `npm install` | Installs the workspace dependencies (`ui` and `sidecar`) |
-| `npm run dev` | Builds the sidecar and opens the app (Tauri + Vite, real Steam session) |
+| `npm install` | Installs the workspace dependencies (`ui`) |
+| `npm run dev` | Opens the app with Vite + Tauri (controls the local Steam client) |
 | `npm run build` | Full NSIS installer → `src-tauri/target/release/bundle/nsis/` |
-| `npm run typecheck -w ui` / `-w sidecar` | Types only, no output |
+| `npm run typecheck -w ui` | Types only, no output |
 | `npm run lint -w ui` | oxlint over the UI |
-| `cargo check --manifest-path src-tauri/Cargo.toml` | Checks the Rust shell |
+| `cargo check --manifest-path src-tauri/Cargo.toml` | Checks the Rust app |
+| `cargo test --manifest-path src-tauri/Cargo.toml` | Unit tests for config and schedule |
 
-The build downloads the official Node runtime used by the sidecar (SHA256-verified) and
-renames the installer to `steam-auto-status_X.Y.Z_x64-setup.exe`.
+The build renames the installer to `steam-auto-status_X.Y.Z_x64-setup.exe`. There is no
+bundled Node runtime: the app is a single native executable (plus WebView2, already present
+on Windows 10/11).
 
 **Releases:** push a `vX.Y.Z` tag from `main`. GitHub Actions builds everything on Windows
 and publishes the release with the installer attached. Curated notes live in
