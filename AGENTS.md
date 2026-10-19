@@ -37,7 +37,6 @@ con sesión iniciada; si está cerrado, el estado ya es Offline. Dos piezas:
 | `src-tauri/tauri.conf.json` | Configuración Tauri: ventana, permisos y versión (fuente de verdad). |
 | `scripts/` | `set-version.mjs` (tag → versión) y `rename-installer.mjs`. |
 | `assets/` | Identidad visual: SVG maestro del icono (`icon-source.svg`), variantes de bandeja por estado, lockup y social preview; `screenshots/` con las capturas del README. |
-| `release-notes/` | Notas curadas por versión; convención en su `README.md`. |
 | `.github/workflows/release.yml` | Release por tag `vX.Y.Z`: compila en `windows-latest` y publica el instalador. |
 
 ## Entorno
@@ -117,7 +116,9 @@ Ejecuta lo que aplique a lo tocado; no lo omitas:
 4. **`main` y releases, solo a petición**: el merge a `main` y los tags se hacen únicamente
    cuando el usuario lo pide, tras verificar el bloque/funcionalidad en su máquina.
 5. **Releases**: el usuario decide la versión; el tag `vX.Y.Z` se corta desde `main` y
-   GitHub Actions publica el instalador (SPEC §9 y `release-notes/README.md`).
+   GitHub Actions publica el instalador con notas autogeneradas (SPEC §9). Las notas
+   curadas viven solo en local (`release-notes/`, ignorado por git) y se aplican después
+   con `gh release edit --notes-file`.
 6. **Documentación como parte del cambio**: actualiza SPEC.md si cambia el comportamiento o
    la arquitectura, y README.md si el cambio es visible para el usuario.
 
@@ -128,6 +129,9 @@ Ejecuta lo que aplique a lo tocado; no lo omitas:
   `profile.json` y `steam-data/` son **restos de la versión antigua con login**: la app ya no
   los lee ni los escribe, y los agentes no deben tocarlos. El usuario puede borrarlos desde
   Ajustes › Cliente de Steam (con confirmación).
+- **Notas curadas**: `release-notes/` existe solo en local (`.gitignore`); no se sube al
+  remoto. Tras publicar CI, se aplican al release con
+  `gh release edit vX.Y.Z --notes-file release-notes/vX.Y.Z.md` (SPEC §9).
 - **Empaquetado**: el instalador contiene solo el ejecutable Rust; ya no hay sidecar,
   `runtime/node.exe`, `system.pem` ni recursos extra. `tauri.conf.json` no declara
   `bundle.resources`.

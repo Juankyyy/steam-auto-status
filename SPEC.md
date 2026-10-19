@@ -436,15 +436,17 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 - **Releases:** el usuario decide la versión (major/minor/patch a su criterio) y se corta
   el tag `vX.Y.Z` desde `main`. GitHub Actions compila y publica la release con el
   instalador adjunto (`.github/workflows/release.yml`); el tag es la fuente de verdad de
-  la versión. Notas de la release: si existe `release-notes/vX.Y.Z.md` se usa tal cual;
-  si no, el workflow las autogenera desde los commits convencionales (`feat:`, `fix:`…)
-  desde el tag anterior.
+  la versión. El workflow publica con notas autogeneradas desde los commits convencionales
+  (`feat:`, `fix:`…) desde el tag anterior. **Las notas curadas no viven en el repo**:
+  `release-notes/` está en `.gitignore` y solo existe en local; tras publicar CI, se
+  aplican con `gh release edit vX.Y.Z --notes-file release-notes/vX.Y.Z.md`.
 - **Idioma**: todo en **inglés** — código (incluidos comentarios), commits y release notes.
 - **Título de la release**: `vX.Y.Z - The <Tema> Update`, donde `<Tema>` resume en inglés
   lo más importante de la release (Title Case; el título siempre termina en "Update"). La
-  fuente es la primera línea de `release-notes/vX.Y.Z.md`, un comentario HTML oculto con el
-  formato `<!-- title: vX.Y.Z - The <Tema> Update -->` que el workflow lee para titular la
-  release; si falta, el título por defecto es `Steam Auto Status vX.Y.Z`.
+  fuente es la primera línea de `release-notes/vX.Y.Z.md` (archivo local, fuera del repo),
+  un comentario HTML oculto con el formato `<!-- title: vX.Y.Z - The <Tema> Update -->`.
+  CI publica con el título por defecto `Steam Auto Status vX.Y.Z` y después se aplica el
+  título curado con `gh release edit`.
 - **Estilo de las release notes**: en inglés, con emojis **en los títulos de sección** y
   formato amigable. Estructura: (1) contexto breve de la actualización; (2) sección
   destacada `## <emoji> <título descriptivo>` con lo más importante, relacionada con el

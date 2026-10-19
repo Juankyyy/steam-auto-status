@@ -226,8 +226,7 @@ bundled Node runtime: the app is a single native executable (plus WebView2, alre
 on Windows 10/11).
 
 **Releases:** push a `vX.Y.Z` tag from `main`. GitHub Actions builds everything on Windows
-and publishes the release with the installer attached. Curated notes live in
-[`release-notes/`](release-notes/) (English, with emoji section titles).
+and publishes the release with the installer attached.
 
 Design decisions and internals are documented in [SPEC.md](SPEC.md) (Spanish), and
 [AGENTS.md](AGENTS.md) covers the working conventions.

@@ -11,6 +11,9 @@ src-tauri/gen/
 data/
 *.log
 
+# Notas curadas de release (solo locales, nunca al remoto)
+release-notes/
+
 # Entorno
 .env
 .env.*
