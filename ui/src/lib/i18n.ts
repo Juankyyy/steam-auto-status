@@ -23,6 +23,12 @@ const es = {
   'nav.dev': 'Desarrollador',
   'nav.label': 'Módulos',
 
+  // ---------------------------------------------------------------- window controls
+  'window.minimize': 'Minimizar',
+  'window.maximize': 'Maximizar',
+  'window.restore': 'Restaurar',
+  'window.close': 'Cerrar',
+
   // ---------------------------------------------------------------- dashboard › status
   'status.scheduleSummary.one': 'Horario: 1 día · {from}–{until}',
   'status.scheduleSummary.many': 'Horario: {count} días · {from}–{until}',
@@ -185,6 +191,10 @@ const en: Record<keyof typeof es, string> = {
   'nav.settings': 'Settings',
   'nav.dev': 'Developer',
   'nav.label': 'Modules',
+  'window.minimize': 'Minimize',
+  'window.maximize': 'Maximize',
+  'window.restore': 'Restore',
+  'window.close': 'Close',
 
   'status.scheduleSummary.one': 'Schedule: 1 day · {from}–{until}',
   'status.scheduleSummary.many': 'Schedule: {count} days · {from}–{until}',

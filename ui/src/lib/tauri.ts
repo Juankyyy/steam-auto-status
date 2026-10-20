@@ -1,5 +1,6 @@
 import { invoke } from '@tauri-apps/api/core'
 import { listen } from '@tauri-apps/api/event'
+import { getCurrentWindow } from '@tauri-apps/api/window'
 
 export type Persona = 'online' | 'invisible'
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
@@ -97,4 +98,31 @@ export async function copyText(text: string): Promise<void> {
 export async function onSidecarMessage(handler: (msg: SidecarMessage) => void): Promise<() => void> {
   if (!isTauri) return () => {}
   return await listen<SidecarMessage>('sidecar-message', (e) => handler(e.payload))
+}
+
+// ---------------------------------------------------------------- window controls
+// The custom titlebar replaces the native frame (`decorations: false`), so the UI owns
+// minimize/maximize/close. Closing destroys the window only; the app stays in the tray.
+
+export function minimizeWindow(): void {
+  if (isTauri) void getCurrentWindow().minimize()
+}
+
+export function toggleMaximizeWindow(): void {
+  if (isTauri) void getCurrentWindow().toggleMaximize()
+}
+
+export function closeWindow(): void {
+  if (isTauri) void getCurrentWindow().close()
+}
+
+export async function isWindowMaximized(): Promise<boolean> {
+  if (!isTauri) return false
+  return await getCurrentWindow().isMaximized()
+}
+
+/** Subscribes to window resize events (used to refresh the maximize/restore icon). */
+export async function onWindowResized(handler: () => void): Promise<() => void> {
+  if (!isTauri) return () => {}
+  return await getCurrentWindow().onResized(() => handler())
 }

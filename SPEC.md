@@ -150,9 +150,13 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
   presencia**: el punto superior derecho del isotipo es verde con Conectado y Steam abierto,
   y gris (slate) con Invisible o Steam cerrado; solo se reemplaza cuando el estado cambia,
   para evitar parpadeos.
-- **Ventana**: oculta por defecto (`--hidden`); se abre desde la bandeja; **se destruye al
-  cerrar** (no solo se oculta) para liberar los procesos WebView2; se recrea al reabrir.
-  Cerrar nunca debe terminar el proceso; "Salir" solo desde la bandeja.
+- **Ventana**: sin marco nativo (`decorations: false`, tanto en `tauri.conf.json` como en
+  el builder que la recrea). Barra superior propia (`ui/src/components/TitleBar.tsx`) con
+  marca, versión y controles minimizar/maximizar-restaurar/cerrar; se arrastra desde la
+  barra y el doble clic maximiza. Oculta por defecto (`--hidden`); se abre desde la
+  bandeja; **se destruye al cerrar** (no solo se oculta) para liberar los procesos WebView2;
+  se recrea al reabrir. Cerrar nunca debe terminar el proceso; "Salir" solo desde la
+  bandeja. El redimensionado y el tamaño mínimo (720×520) se mantienen.
 - **Núcleo en proceso**: `main.rs` arranca el `Core` (hilos de detección cada 10 s,
   reevaluación cada 30 s y reintentos de arranque de Steam). No hay sidecar ni supervisor
   que reiniciar; un fallo del núcleo sería un fallo de la app.

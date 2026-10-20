@@ -258,6 +258,10 @@ fn show_window(app: &AppHandle) {
         .inner_size(920.0, 660.0)
         .min_inner_size(720.0, 520.0)
         .center()
+        .decorations(false)
+        // Matches `shadow: true` in tauri.conf.json: keep rounded corners and the native
+        // shadow when the window is recreated after being closed.
+        .shadow(true)
         .visible(true)
         .build()
     {
