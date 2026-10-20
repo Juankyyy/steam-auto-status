@@ -5,6 +5,8 @@ import { getCurrentWindow } from '@tauri-apps/api/window'
 export type Persona = 'online' | 'invisible'
 export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 export type Language = 'es' | 'en'
+/** Smallest unit shown by the dashboard countdown. */
+export type CountdownPrecision = 'hours' | 'minutes' | 'seconds'
 
 export interface Config {
   days: Day[]
@@ -15,6 +17,7 @@ export interface Config {
   notifications: boolean
   devMode: boolean
   language: Language
+  countdownPrecision: CountdownPrecision
 }
 
 export interface AppState {

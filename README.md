@@ -48,6 +48,8 @@ status. No second session, no credentials, and nothing to remember before work o
   change. If a command fails it offers **Reapply now**, and **Settings › Steam client** can
   resend it whenever you want handy after changing your status by hand (the local command
   has no reply).
+- **Countdown your way**: choose whether the dashboard countdown shows hours, hours and
+  minutes, or hours, minutes and seconds (default), in **Settings › Appearance**.
 - **Ten times lighter**: A single native process idles at ~35 MB, the installer is ~2.5 MB and
   the installed app ~12 MB, with no Node runtime or background service. Built to stay open
   24/7; the WebView processes are released when you close the window.

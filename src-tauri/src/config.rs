@@ -23,6 +23,7 @@ pub struct Config {
     pub notifications: bool,
     pub dev_mode: bool,
     pub language: String,
+    pub countdown_precision: String,
 }
 
 impl Default for Config {
@@ -42,6 +43,7 @@ impl Default for Config {
             notifications: false,
             dev_mode: false,
             language: detect_language(),
+            countdown_precision: "seconds".into(),
         }
     }
 }
@@ -81,9 +83,14 @@ pub fn load(data_dir: &Path) -> (Config, Vec<String>) {
     let config = merge(&Config::default(), &parsed);
     // Persist the detected language on first run (or after an invalid value) so the
     // first-run choice is stable and visible in config.json. Also rewrite configs from the
-    // old login version so the obsolete machineName field disappears.
+    // old login version so the obsolete machineName field disappears, and configs that
+    // predate the countdown preference so its default is visible too.
     let persisted_language = parsed.get("language").and_then(Value::as_str);
-    if persisted_language != Some(config.language.as_str()) || parsed.get("machineName").is_some() {
+    let persisted_precision = parsed.get("countdownPrecision").and_then(Value::as_str);
+    if persisted_language != Some(config.language.as_str())
+        || persisted_precision != Some(config.countdown_precision.as_str())
+        || parsed.get("machineName").is_some()
+    {
         if let Err(e) = save(data_dir, &config) {
             warnings.push(format!("Could not save config.json: {e}"));
         }
@@ -129,6 +136,11 @@ pub fn merge(base: &Config, overlay: &Value) -> Config {
         notifications: bool_field(base.notifications, overlay, "notifications"),
         dev_mode: bool_field(base.dev_mode, overlay, "devMode"),
         language: language_field(base, overlay, &defaults.language),
+        countdown_precision: countdown_precision_field(
+            base,
+            overlay,
+            &defaults.countdown_precision,
+        ),
     }
 }
 
@@ -159,6 +171,19 @@ fn language_field(base: &Config, overlay: &Value, fallback: &str) -> String {
         candidate
     } else {
         fallback.to_string()
+    }
+}
+
+/// Smallest unit shown by the dashboard countdown. Invalid values fall back to `seconds`.
+fn countdown_precision_field(base: &Config, overlay: &Value, fallback: &str) -> String {
+    let candidate = match overlay.get("countdownPrecision") {
+        Some(Value::String(value)) => value.trim().to_lowercase(),
+        Some(_) => String::new(),
+        None => base.countdown_precision.trim().to_lowercase(),
+    };
+    match candidate.as_str() {
+        "hours" | "minutes" | "seconds" => candidate,
+        _ => fallback.to_string(),
     }
 }
 
@@ -229,6 +254,7 @@ mod tests {
         assert_eq!(merged.online_from, base.online_from);
         assert_eq!(merged.online_until, base.online_until);
         assert_eq!(merged.language, base.language);
+        assert_eq!(merged.countdown_precision, base.countdown_precision);
     }
 
     #[test]
@@ -242,7 +268,8 @@ mod tests {
                 "onlineUntil": "25:00",
                 "paused": 1,
                 "notifications": "",
-                "language": "EN"
+                "language": "EN",
+                "countdownPrecision": "MINUTES"
             }),
         );
         assert_eq!(merged.days, vec!["mon", "fri", "sun"]);
@@ -251,6 +278,24 @@ mod tests {
         assert!(merged.paused);
         assert!(!merged.notifications);
         assert_eq!(merged.language, "en");
+        assert_eq!(merged.countdown_precision, "minutes");
+    }
+
+    #[test]
+    fn merge_validates_countdown_precision() {
+        let base = Config::default();
+        assert_eq!(
+            merge(&base, &json!({ "countdownPrecision": "HOURS" })).countdown_precision,
+            "hours"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "countdownPrecision": "days" })).countdown_precision,
+            "seconds"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "countdownPrecision": 3 })).countdown_precision,
+            "seconds"
+        );
     }
 
     #[test]

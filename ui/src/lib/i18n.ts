@@ -128,6 +128,15 @@ const es = {
   'settings.app.devModeHint':
     'Muestra una pestaña extra con herramientas internas (forzar estados, registro en vivo).',
 
+  // ---------------------------------------------------------------- settings › appearance
+  'settings.appearance.title': 'Apariencia',
+  'settings.appearance.description': 'Detalle de la cuenta atrás del panel.',
+  'settings.appearance.countdown': 'Cuenta atrás',
+  'settings.appearance.countdownHint': 'Unidades que se muestran en el contador del panel.',
+  'settings.appearance.countdownHours': 'Horas',
+  'settings.appearance.countdownMinutes': 'Horas y minutos',
+  'settings.appearance.countdownSeconds': 'Horas, minutos y segundos',
+
   // ---------------------------------------------------------------- settings › language
   'settings.language.title': 'Idioma',
   'settings.language.description':
@@ -291,6 +300,14 @@ const en: Record<keyof typeof es, string> = {
   'settings.app.devMode': 'Developer mode',
   'settings.app.devModeHint':
     'Shows an extra tab with internal tools (force states, live log).',
+
+  'settings.appearance.title': 'Appearance',
+  'settings.appearance.description': 'Dashboard countdown detail.',
+  'settings.appearance.countdown': 'Countdown',
+  'settings.appearance.countdownHint': 'Units shown in the dashboard countdown.',
+  'settings.appearance.countdownHours': 'Hours',
+  'settings.appearance.countdownMinutes': 'Hours & minutes',
+  'settings.appearance.countdownSeconds': 'Hours, minutes & seconds',
 
   'settings.language.title': 'Language',
   'settings.language.description':

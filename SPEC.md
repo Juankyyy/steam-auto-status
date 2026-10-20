@@ -200,8 +200,9 @@ accesible. NumberFlow y AutoAnimate respetan también esa preferencia por su cue
 **Panel de control** (`/`): estado del cliente y resumen del horario:
 
 1. **Estado**: "Conectado" / "Invisible" / "Steam cerrado" / "Esperando a Steam" + cuenta
-   atrás a la próxima transición ("Online en 2 h 14 min" / "Invisible a la 01:00") y el
-   último cambio aplicado ("Último cambio: Invisible a la 01:00").
+   atrás a la próxima transición ("Online en 2 h 14 min 30 s" / "Invisible a la 01:00"),
+   con el detalle configurable en Ajustes › Apariencia, y el último cambio aplicado
+   ("Último cambio: Invisible a la 01:00").
 2. **Programación**: resumen del horario, interruptor rápido activar/pausar y enlace
    "Editar en Ajustes".
 3. **Steam cerrado**: aviso con botón **Abrir Steam** cuando el proceso no está en marcha;
@@ -218,6 +219,8 @@ tarjetas:
   antigua (`auth.json`, `profile.json`, `steam-data/`), una tarjeta de limpieza con
   confirmación y enlace a «Gestionar dispositivos de Steam».
 - **Aplicación**: iniciar con Windows, notificaciones y modo desarrollador.
+- **Apariencia**: detalle de la cuenta atrás del panel (solo horas, horas y minutos u horas,
+  minutos y segundos); se aplica al momento.
 - **Idioma**: conmutador Español | English (los nombres, cada uno en su idioma); el cambio
   se aplica al momento en interfaz, bandeja y notificaciones.
 - **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, vaciar
@@ -306,7 +309,8 @@ Ejemplo de `config.json`:
   "startWithWindows": false,
   "notifications": false,
   "devMode": false,
-  "language": "es"
+  "language": "es",
+  "countdownPrecision": "seconds"
 }
 ```
 
@@ -316,6 +320,13 @@ cliente de Steam.
 `language` (`"es"` | `"en"`) fija el idioma de la interfaz, la bandeja, el tooltip y las
 notificaciones. Si falta (configs antiguas o primer arranque), se detecta del idioma de
 Windows (es → Español, resto → English) y se persiste en el primer guardado.
+
+`countdownPrecision` (`"hours"` | `"minutes"` | `"seconds"`, por defecto `"seconds"`) fija
+el detalle de la cuenta atrás del panel: solo horas, horas y minutos, u horas, minutos y
+segundos. El ajuste afecta solo a la UI (el núcleo sigue enviando `nextTransition`); las
+configs antiguas reciben el valor por defecto y se reescriben al arrancar. Con más de 24 h
+se mantienen los días por delante (`2 d 5 h 30 min 12 s`); si faltan menos unidades que la
+precisión elegida, se muestra la unidad menor para no enseñar un cero.
 
 ### 4.7 Empaquetado
 
