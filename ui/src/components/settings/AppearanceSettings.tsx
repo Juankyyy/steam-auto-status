@@ -1,10 +1,10 @@
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
-import { useI18n } from '@/lib/i18n-context'
+import { SegmentedControl } from '@/components/settings/SegmentedControl'
+import { SettingsRow, SettingsSection } from '@/components/settings/SettingsSection'
 import type { TranslationKey } from '@/lib/i18n'
+import { useI18n } from '@/lib/i18n-context'
 import { cmd, type AppState, type CountdownPrecision } from '@/lib/tauri'
-import { cn } from '@/lib/utils'
 
-const OPTIONS: { value: CountdownPrecision; key: TranslationKey }[] = [
+const COUNTDOWN_OPTIONS: { value: CountdownPrecision; key: TranslationKey }[] = [
   { value: 'hours', key: 'settings.appearance.countdownHours' },
   { value: 'minutes', key: 'settings.appearance.countdownMinutes' },
   { value: 'seconds', key: 'settings.appearance.countdownSeconds' },
@@ -14,47 +14,30 @@ const OPTIONS: { value: CountdownPrecision; key: TranslationKey }[] = [
 export function AppearanceSettings({ state }: { state: AppState | null }) {
   const { t } = useI18n()
   const cfg = state?.config
+  const countdownOptions = COUNTDOWN_OPTIONS.map(({ value, key }) => ({
+    value,
+    label: t(key),
+  }))
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('settings.appearance.title')}</CardTitle>
-        <CardDescription>{t('settings.appearance.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-3">
-        <div>
-          <p className="text-sm font-medium">{t('settings.appearance.countdown')}</p>
-          <p className="text-xs text-muted-foreground">{t('settings.appearance.countdownHint')}</p>
-        </div>
-
-        <div
-          role="radiogroup"
-          aria-label={t('settings.appearance.countdown')}
-          className="flex w-fit flex-wrap gap-1 rounded-lg border border-border/60 p-1"
-        >
-          {OPTIONS.map(({ value, key }) => {
-            const active = cfg?.countdownPrecision === value
-            return (
-              <button
-                key={value}
-                type="button"
-                role="radio"
-                aria-checked={active}
-                disabled={!cfg}
-                className={cn(
-                  'rounded-md px-3 py-1.5 text-sm transition-colors disabled:cursor-not-allowed disabled:opacity-50',
-                  active
-                    ? 'bg-secondary text-secondary-foreground'
-                    : 'text-muted-foreground hover:text-foreground',
-                )}
-                onClick={() => void cmd('setConfig', { countdownPrecision: value })}
-              >
-                {t(key)}
-              </button>
-            )
-          })}
-        </div>
-      </CardContent>
-    </Card>
+    <SettingsSection
+      title={t('settings.appearance.title')}
+      description={t('settings.appearance.description')}
+      contentClassName="gap-0"
+    >
+      <SettingsRow
+        label={t('settings.appearance.countdown')}
+        hint={t('settings.appearance.countdownHint')}
+        control={
+          <SegmentedControl
+            options={countdownOptions}
+            value={cfg?.countdownPrecision}
+            onChange={(value) => void cmd('setConfig', { countdownPrecision: value })}
+            ariaLabel={t('settings.appearance.countdown')}
+            disabled={!cfg}
+          />
+        }
+      />
+    </SettingsSection>
   )
 }

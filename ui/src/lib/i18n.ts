@@ -83,6 +83,10 @@ const es = {
   'dev.reapply': 'Reaplicar ahora',
   'dev.noLogs': 'Sin registros todavía…',
 
+  // ---------------------------------------------------------------- settings
+  'settings.nav.label': 'Secciones de ajustes',
+  'settings.autosave': 'Los cambios se guardan automáticamente.',
+
   // ---------------------------------------------------------------- settings › schedule
   'settings.schedule.title': 'Horario',
   'settings.schedule.description':
@@ -119,7 +123,7 @@ const es = {
 
   // ---------------------------------------------------------------- settings › app
   'settings.app.title': 'Aplicación',
-  'settings.app.description': 'Arranque con Windows, avisos y herramientas internas.',
+  'settings.app.description': 'Arranque con Windows, idioma, avisos y herramientas internas.',
   'settings.app.autostart': 'Iniciar con Windows',
   'settings.app.autostartHint': 'Arranca minimizada, solo en la bandeja.',
   'settings.app.notifications': 'Notificaciones',
@@ -127,6 +131,7 @@ const es = {
   'settings.app.devMode': 'Modo desarrollador',
   'settings.app.devModeHint':
     'Muestra una pestaña extra con herramientas internas (forzar estados, registro en vivo).',
+  'settings.app.advanced': 'Avanzado',
 
   // ---------------------------------------------------------------- settings › appearance
   'settings.appearance.title': 'Apariencia',
@@ -150,8 +155,12 @@ const es = {
   'settings.data.copy': 'Copiar diagnóstico',
   'settings.data.copied': 'Copiado',
   'settings.data.clear': 'Vaciar registro',
+  'settings.data.clearTitle': 'Registro',
+  'settings.data.clearHint':
+    'Borra las líneas actuales de status.log. No afecta a la configuración.',
   'settings.data.clearConfirm':
     '¿Vaciar el registro? Se borrarán las líneas actuales de status.log.',
+  'settings.data.maintenance': 'Mantenimiento',
   'settings.data.hint':
     'El diagnóstico incluye la versión, el estado del cliente y las últimas líneas del registro: útil si abres un incidente en GitHub. Desinstalar la app no borra esta carpeta.',
   'settings.data.copyError': 'No se pudo copiar: {error}',
@@ -259,6 +268,9 @@ const en: Record<keyof typeof es, string> = {
   'dev.reapply': 'Reapply now',
   'dev.noLogs': 'No log entries yet…',
 
+  'settings.nav.label': 'Settings sections',
+  'settings.autosave': 'Changes are saved automatically.',
+
   'settings.schedule.title': 'Schedule',
   'settings.schedule.description':
     'Local time. If the end time is earlier than the start time, the window ends the next day (e.g. 5:30 PM → 1:00 AM).',
@@ -292,7 +304,7 @@ const en: Record<keyof typeof es, string> = {
   'steamClient.revoke': 'Manage Steam devices',
 
   'settings.app.title': 'Application',
-  'settings.app.description': 'Windows startup, notifications and internal tools.',
+  'settings.app.description': 'Windows startup, language, notifications and internal tools.',
   'settings.app.autostart': 'Start with Windows',
   'settings.app.autostartHint': 'Starts minimized, in the tray only.',
   'settings.app.notifications': 'Notifications',
@@ -300,6 +312,7 @@ const en: Record<keyof typeof es, string> = {
   'settings.app.devMode': 'Developer mode',
   'settings.app.devModeHint':
     'Shows an extra tab with internal tools (force states, live log).',
+  'settings.app.advanced': 'Advanced',
 
   'settings.appearance.title': 'Appearance',
   'settings.appearance.description': 'Dashboard countdown detail.',
@@ -320,7 +333,10 @@ const en: Record<keyof typeof es, string> = {
   'settings.data.copy': 'Copy diagnostics',
   'settings.data.copied': 'Copied',
   'settings.data.clear': 'Clear log',
+  'settings.data.clearTitle': 'Log',
+  'settings.data.clearHint': 'Deletes the current status.log lines. Settings are not affected.',
   'settings.data.clearConfirm': 'Clear the log? The current status.log lines will be deleted.',
+  'settings.data.maintenance': 'Maintenance',
   'settings.data.hint':
     'The diagnostics include the version, the client state and the latest log lines: useful when you open a GitHub issue. Uninstalling the app does not delete this folder.',
   'settings.data.copyError': 'Could not copy: {error}',

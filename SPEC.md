@@ -209,27 +209,30 @@ accesible. NumberFlow y AutoAnimate respetan también esa preferencia por su cue
    mientras Steam inicia, un aviso informativo. Si el último comando falló, un aviso con
    botón **Reaplicar ahora**.
 
-**Ajustes** (`/settings`): configuración persistente y mantenimiento, organizada en
-tarjetas:
+**Ajustes** (`/settings`): configuración persistente y mantenimiento. Una barra lateral
+muestra las secciones y solo se muestra una a la vez (**Horario** por defecto); en anchos muy
+estrechos (por debajo del mínimo de la ventana) la barra pasa a una fila horizontal. La
+sección activa es estado local de la UI: no añade rutas ni cambia el contrato IPC.
 
 - **Horario**: horas inicio/fin, días de la semana, resumen de la franja (día, horas y
   duración) y botón para restaurar los valores por defecto.
 - **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
   estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
-  antigua (`auth.json`, `profile.json`, `steam-data/`), una tarjeta de limpieza con
+  antigua (`auth.json`, `profile.json`, `steam-data/`), un bloque de limpieza con
   confirmación y enlace a «Gestionar dispositivos de Steam».
-- **Aplicación**: iniciar con Windows, notificaciones y modo desarrollador.
+- **Aplicación**: iniciar con Windows, notificaciones e idioma (conmutador Español | English,
+  cada nombre en su idioma); el modo desarrollador queda al final, bajo un apartado
+  «Avanzado». El idioma cambia al momento en interfaz, bandeja y notificaciones.
 - **Apariencia**: detalle de la cuenta atrás del panel (solo horas, horas y minutos u horas,
   minutos y segundos); se aplica al momento.
-- **Idioma**: conmutador Español | English (los nombres, cada uno en su idioma); el cambio
-  se aplica al momento en interfaz, bandeja y notificaciones.
-- **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, vaciar
-  `status.log` y copiar un diagnóstico (versión, estado y últimas líneas del registro)
-  para reportar problemas.
+- **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, copiar un
+  diagnóstico (versión, estado y últimas líneas del registro) para reportar problemas y, en
+  «Mantenimiento», vaciar `status.log`.
 - **Acerca de**: versión y enlaces al repositorio, última release e issues.
 
-Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
-conserva el resumen del horario y la pausa rápida.
+La interfaz indica una vez que los cambios se guardan automáticamente. Los controles de
+configuración que antes vivían en el panel se han movido aquí; el panel conserva el resumen
+del horario y la pausa rápida.
 
 **Idioma (es/en):** los textos de la interfaz viven en un diccionario tipado
 (`ui/src/lib/i18n.ts`): `es` es la fuente de los tipos y `en` debe completar exactamente las
@@ -438,8 +441,8 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 8. Si vienes de la versión antigua, comprobar que Ajustes › Cliente de Steam detecta los
    restos (`auth.json`, `profile.json`, `steam-data/`), que la confirmación los borra y que
    `config.json` y `logs/` se conservan. Revocar el token en Steam es un paso manual.
-9. Cambiar el idioma en Ajustes › Idioma y comprobar que interfaz, bandeja (menú y tooltip)
-   y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
+9. Cambiar el idioma en Ajustes › Aplicación y comprobar que interfaz, bandeja (menú y
+   tooltip) y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
 
 ## 8. Entorno
 

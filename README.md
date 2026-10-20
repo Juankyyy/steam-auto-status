@@ -207,7 +207,7 @@ use it at your own risk.
 <details>
 <summary><strong>What languages are available?</strong></summary>
 
-The interface ships in English and Spanish; switch it any time in **Settings › Language**
+The interface ships in English and Spanish; switch it any time in **Settings › Application**
 (it applies instantly to the panel, the tray menu, the tooltip and notifications). On first
 run the app follows your Windows language.
 

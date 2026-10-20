@@ -1,8 +1,9 @@
+import { SettingsSection } from '@/components/settings/SettingsSection'
 import { Button } from '@/components/ui/button'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { formatClockAt } from '@/lib/i18n'
 import { useI18n } from '@/lib/i18n-context'
 import { cmd, openSteam, openUrl, type AppState } from '@/lib/tauri'
+import { cn } from '@/lib/utils'
 
 /**
  * Settings › Steam client.
@@ -26,6 +27,14 @@ export function SteamClientSettings({ state }: { state: AppState | null }) {
         ? t('steamClient.starting')
         : t('steamClient.running')
 
+  const statusTone = !state
+    ? 'text-muted-foreground'
+    : state.steamStarting
+      ? 'text-status-starting'
+      : state.steamRunning
+        ? 'text-status-online'
+        : 'text-status-closed'
+
   const lastApplied = state?.lastAppliedAt
     ? t('steamClient.lastAppliedValue', {
         state: t(state.persona === 'online' ? 'common.online' : 'common.invisible'),
@@ -34,54 +43,63 @@ export function SteamClientSettings({ state }: { state: AppState | null }) {
     : t('steamClient.never')
 
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>{t('steamClient.title')}</CardTitle>
-        <CardDescription>{t('steamClient.description')}</CardDescription>
-      </CardHeader>
-      <CardContent className="grid gap-5">
-        <div className="flex flex-wrap items-center justify-between gap-4">
-          <div className="grid gap-1">
+    <SettingsSection title={t('steamClient.title')} description={t('steamClient.description')}>
+      <div className="flex flex-wrap items-center justify-between gap-4">
+        <div className="grid gap-1">
+          <div className={cn('flex items-center gap-2', statusTone)}>
+            <span
+              className={cn(
+                'status-dot',
+                state?.steamRunning && !state.steamStarting
+                  ? 'status-dot--pulse'
+                  : 'status-dot--blink',
+              )}
+              aria-hidden="true"
+            />
             <p className="text-sm font-medium">{clientState}</p>
-            <p className="text-xs text-muted-foreground">{t('steamClient.requirement')}</p>
-            <p className="text-xs text-muted-foreground">
-              {t('steamClient.lastApplied')}: {lastApplied}
+          </div>
+          <p className="text-xs text-muted-foreground">{t('steamClient.requirement')}</p>
+          <p className="text-xs text-muted-foreground">
+            {t('steamClient.lastApplied')}: {lastApplied}
+          </p>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          {state && !state.steamRunning && (
+            <Button size="sm" variant="outline" onClick={() => void openSteam()}>
+              {t('steamClient.open')}
+            </Button>
+          )}
+          <Button size="sm" variant="outline" onClick={() => void cmd('reapply')}>
+            {t('steamClient.reapply')}
+          </Button>
+        </div>
+      </div>
+
+      {state?.legacyDataPresent && (
+        <div className="grid gap-3 rounded-lg border border-status-starting/30 bg-status-starting/5 p-4">
+          <div className="grid gap-1">
+            <p className="text-sm font-medium">{t('steamClient.legacyTitle')}</p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t('steamClient.legacyDescription')}
+            </p>
+            <p className="text-xs leading-relaxed text-muted-foreground">
+              {t('steamClient.legacyHint')}
             </p>
           </div>
           <div className="flex flex-wrap gap-2">
-            {state && !state.steamRunning && (
-              <Button size="sm" variant="outline" onClick={() => void openSteam()}>
-                {t('steamClient.open')}
-              </Button>
-            )}
-            <Button size="sm" variant="outline" onClick={() => void cmd('reapply')}>
-              {t('steamClient.reapply')}
+            <Button variant="destructive" size="sm" onClick={deleteLegacyData}>
+              {t('steamClient.legacyDelete')}
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => void openUrl('https://store.steampowered.com/account/authorizeddevices')}
+            >
+              {t('steamClient.revoke')}
             </Button>
           </div>
         </div>
-
-        {state?.legacyDataPresent && (
-          <div className="grid gap-3 border-t border-border/60 pt-4">
-            <div className="grid gap-0.5">
-              <p className="text-sm font-medium">{t('steamClient.legacyTitle')}</p>
-              <p className="text-xs text-muted-foreground">{t('steamClient.legacyDescription')}</p>
-              <p className="text-xs text-muted-foreground">{t('steamClient.legacyHint')}</p>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              <Button variant="destructive" size="sm" onClick={deleteLegacyData}>
-                {t('steamClient.legacyDelete')}
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => void openUrl('https://store.steampowered.com/account/authorizeddevices')}
-              >
-                {t('steamClient.revoke')}
-              </Button>
-            </div>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+      )}
+    </SettingsSection>
   )
 }
