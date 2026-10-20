@@ -1,5 +1,12 @@
 import { useId, type ReactNode } from 'react'
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import {
+  Card,
+  CardAction,
+  CardContent,
+  CardDescription,
+  CardHeader,
+  CardTitle,
+} from '@/components/ui/card'
 import { cn } from '@/lib/utils'
 
 type SettingsSectionProps = {
@@ -7,6 +14,8 @@ type SettingsSectionProps = {
   description?: string
   children: ReactNode
   contentClassName?: string
+  /** Optional control shown at the right of the title (e.g. a Switch). */
+  action?: ReactNode
 }
 
 /** Standard panel for one settings section: title, short description and content. */
@@ -15,6 +24,7 @@ export function SettingsSection({
   description,
   children,
   contentClassName,
+  action,
 }: SettingsSectionProps) {
   const titleId = useId()
 
@@ -25,6 +35,7 @@ export function SettingsSection({
           {title}
         </CardTitle>
         {description && <CardDescription>{description}</CardDescription>}
+        {action && <CardAction>{action}</CardAction>}
       </CardHeader>
       <CardContent className={cn('grid gap-4', contentClassName)}>{children}</CardContent>
     </Card>

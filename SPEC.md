@@ -201,11 +201,10 @@ accesible. NumberFlow y AutoAnimate respetan también esa preferencia por su cue
 
 1. **Estado**: "Conectado" / "Invisible" / "Steam cerrado" / "Esperando a Steam" + cuenta
    atrás a la próxima transición ("Online en 2 h 14 min 30 s" / "Invisible a la 01:00"),
-   con el detalle configurable en Ajustes › Apariencia, y el último cambio aplicado
-   ("Último cambio: Invisible a la 01:00").
-2. **Programación**: resumen del horario, interruptor rápido activar/pausar y enlace
-   "Editar en Ajustes".
-3. **Steam cerrado**: aviso con botón **Abrir Steam** cuando el proceso no está en marcha;
+   con el detalle configurable en Ajustes › Apariencia, el último cambio aplicado
+   ("Último cambio: Invisible a la 01:00"), el resumen del horario y los badges de
+   franja/pausa.
+2. **Steam cerrado**: aviso con botón **Abrir Steam** cuando el proceso no está en marcha;
    mientras Steam inicia, un aviso informativo. Si el último comando falló, un aviso con
    botón **Reaplicar ahora**.
 
@@ -214,8 +213,11 @@ muestra las secciones y solo se muestra una a la vez (**Horario** por defecto); 
 estrechos (por debajo del mínimo de la ventana) la barra pasa a una fila horizontal. La
 sección activa es estado local de la UI: no añade rutas ni cambia el contrato IPC.
 
-- **Horario**: horas inicio/fin, días de la semana, resumen de la franja (día, horas y
-  duración) y botón para restaurar los valores por defecto.
+- **Horario**: horas inicio/fin con campos segmentados (24 h, o 12 h con AM/PM en inglés),
+  una franja visual de 24 h con extremos arrastrables en pasos de 5 min (los campos permiten
+  ajuste al minuto) y días de la semana. El interruptor de la cabecera activa o desactiva el
+  horario (equivale a pausar o reanudar la automatización); mientras está desactivado, los
+  controles quedan bloqueados y atenuados.
 - **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
   estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
   antigua (`auth.json`, `profile.json`, `steam-data/`), un bloque de limpieza con
@@ -231,7 +233,8 @@ sección activa es estado local de la UI: no añade rutas ni cambia el contrato 
 - **Acerca de**: versión y enlaces al repositorio, última release e issues.
 
 Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
-conserva el resumen del horario y la pausa rápida.
+conserva el resumen del horario dentro de la tarjeta de estado y el interruptor para
+activarlo o desactivarlo vive en Ajustes › Horario.
 
 **Idioma (es/en):** los textos de la interfaz viven en un diccionario tipado
 (`ui/src/lib/i18n.ts`): `es` es la fuente de los tipos y `en` debe completar exactamente las
@@ -239,9 +242,10 @@ mismas claves — si falta una traducción, falla el build. El contexto (`i18n-c
 expone el hook `useI18n()` con `t(clave, params)` (plantillas `{param}`) y el idioma activo
 sale de `config.json › language`, así que la interfaz, la bandeja y las notificaciones
 siguen un único ajuste. Formato con `Intl` por idioma (24 h en español, 12 h AM/PM en
-inglés; duraciones «7 h 30 min» / «7h 30m»); los campos `type="time"` siguen el formato de
-Windows. El `<html lang>` se actualiza en vivo. Los logs del núcleo/shell y el diagnóstico
-técnico van siempre en inglés.
+inglés; duraciones «7 h 30 min» / «7h 30m»); los campos de hora son propios (dos segmentos
+editables y AM/PM cuando corresponde) y guardan `HH:MM` en `config.json`. El `<html lang>`
+se actualiza en vivo. Los logs del núcleo/shell y el diagnóstico técnico van siempre en
+inglés.
 
 **Desarrollador** (`/dev`): herramientas internas que no deben aparecer para el usuario
 final (forzar Conectado/Invisible y visor del registro en vivo). La pestaña solo aparece

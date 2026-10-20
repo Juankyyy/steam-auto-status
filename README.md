@@ -31,8 +31,8 @@ status. No second session, no credentials, and nothing to remember before work o
 ## ✨ Features
 
 - **Schedule-driven presence**: Online inside your weekly window and Invisible outside it.
-  Pick the days and the start/end time, including overnight windows (default: Monday–Friday,
-  17:30 → 01:00).
+  Pick the days and the start/end time on a draggable 24-hour strip, including overnight
+  windows (default: Monday–Friday, 17:30 → 01:00).
 - **No login, no session**: The app doesn't sign in, store a token or create a second Steam
   session. It asks the official client that is already open to change its own status, using
   the same local commands as the Friends → Status menu; it doesn't even know which account is
@@ -83,7 +83,7 @@ schedule as soon as the client is signed in.
 ### 3. Forget about it
 
 The app lives in the tray and switches your presence on schedule. Open the panel any time
-to adjust hours, weekdays, notifications or to pause the automation.
+to adjust the days and hours, enable or disable the schedule, or change notifications.
 
 ## ⚙️ How it works
 

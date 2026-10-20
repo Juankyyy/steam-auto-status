@@ -49,18 +49,8 @@ const es = {
   'status.lastApplied': 'Último cambio: {state} a las {time}',
   'status.applyError': 'No se pudo cambiar el estado',
 
-  // ---------------------------------------------------------------- dashboard › schedule card
-  'schedule.title': 'Programación',
-  'schedule.quickLabel': 'Automatización activa',
-  'schedule.quickHint': 'Al pausarla, la app deja de cambiar el estado; tu estado actual se queda como está.',
-  'schedule.editInSettings': 'Editar en Ajustes',
-
   // ---------------------------------------------------------------- schedule summaries (lib/schedule.ts)
   'schedule.noWindow': 'sin franja',
-  'schedule.noDays': 'Ningún día',
-  'schedule.everyDay': 'Todos los días',
-  'schedule.weekdays': 'Lun–Vie',
-  'schedule.weekend': 'Sáb y Dom',
   'schedule.hours': '{h} h',
   'schedule.hoursMinutes': '{h} h {m} min',
   'schedule.minutes': '{m} min',
@@ -89,13 +79,24 @@ const es = {
   // ---------------------------------------------------------------- settings › schedule
   'settings.schedule.title': 'Horario',
   'settings.schedule.description':
-    'Horario en hora local. Si la hora de fin es anterior a la de inicio, la franja termina al día siguiente (p. ej. 17:30 → 01:00).',
+    'Elige los días y las horas en las que quieres que tu estado de Steam sea Conectado. Fuera de ese horario, la app cambiará tu estado a Invisible.',
   'settings.schedule.from': 'Conectado desde',
   'settings.schedule.until': 'Hasta',
+  'settings.schedule.hours': 'Horas',
+  'settings.schedule.minutes': 'Minutos',
+  'settings.schedule.timeHint': 'Escribe o usa ↑ ↓ para ajustar la hora',
+  'settings.schedule.windowLabel': 'Ventana de conexión',
+  'settings.schedule.windowStart': 'Inicio de la ventana',
+  'settings.schedule.windowEnd': 'Fin de la ventana',
+  'settings.schedule.windowHint': 'Arrastra los extremos o edita las horas',
+  'settings.schedule.crossesMidnight': 'Cruza medianoche',
+  'settings.schedule.onlineFor': '{duration} conectado',
   'settings.schedule.days': 'Días',
+  'settings.schedule.toggle': 'Activar horario',
+  'settings.schedule.enabledHint':
+    'Cuando está desactivado, la app deja de cambiar tu estado; el actual se mantiene.',
   'settings.schedule.noWindowWarning':
     'La hora de inicio y la de fin coinciden: ahora mismo no habría ninguna franja Conectado.',
-  'settings.schedule.restore': 'Restaurar por defecto',
 
   // ---------------------------------------------------------------- settings › steam client
   'steamClient.title': 'Cliente de Steam',
@@ -236,16 +237,7 @@ const en: Record<keyof typeof es, string> = {
   'status.lastApplied': 'Last change: {state} at {time}',
   'status.applyError': 'Could not change the status',
 
-  'schedule.title': 'Schedule',
-  'schedule.quickLabel': 'Automation active',
-  'schedule.quickHint': 'When paused, the app stops changing your status; it stays as it is.',
-  'schedule.editInSettings': 'Edit in Settings',
-
   'schedule.noWindow': 'no window',
-  'schedule.noDays': 'No days',
-  'schedule.everyDay': 'Every day',
-  'schedule.weekdays': 'Mon–Fri',
-  'schedule.weekend': 'Sat & Sun',
   'schedule.hours': '{h}h',
   'schedule.hoursMinutes': '{h}h {m}m',
   'schedule.minutes': '{m}m',
@@ -271,13 +263,24 @@ const en: Record<keyof typeof es, string> = {
 
   'settings.schedule.title': 'Schedule',
   'settings.schedule.description':
-    'Local time. If the end time is earlier than the start time, the window ends the next day (e.g. 5:30 PM → 1:00 AM).',
+    'Choose the days and times when you want your Steam status to be Online. Outside that schedule, the app switches your status to Invisible.',
   'settings.schedule.from': 'Online from',
   'settings.schedule.until': 'Until',
+  'settings.schedule.hours': 'Hours',
+  'settings.schedule.minutes': 'Minutes',
+  'settings.schedule.timeHint': 'Type or use ↑ ↓ to adjust the time',
+  'settings.schedule.windowLabel': 'Online window',
+  'settings.schedule.windowStart': 'Window start',
+  'settings.schedule.windowEnd': 'Window end',
+  'settings.schedule.windowHint': 'Drag the ends or edit the times',
+  'settings.schedule.crossesMidnight': 'Crosses midnight',
+  'settings.schedule.onlineFor': '{duration} online',
   'settings.schedule.days': 'Days',
+  'settings.schedule.toggle': 'Enable schedule',
+  'settings.schedule.enabledHint':
+    'When off, the app stops changing your status; it stays as it is.',
   'settings.schedule.noWindowWarning':
     'Start and end time are the same: there would be no Online window right now.',
-  'settings.schedule.restore': 'Restore defaults',
 
   'steamClient.title': 'Steam client',
   'steamClient.description':
@@ -382,6 +385,18 @@ export const LANGUAGE_NAMES: Record<Language, string> = { es: 'Español', en: 'E
 
 /** BCP-47 locales used for Intl date/time formatting. */
 export const LANGUAGE_LOCALES: Record<Language, string> = { es: 'es-ES', en: 'en-US' }
+
+const twelveHourClocks = new Map<Language, boolean>()
+
+/** Whether clocks in `lang` use AM/PM instead of a 24-hour cycle (English does). */
+export function uses12HourClock(lang: Language): boolean {
+  const cached = twelveHourClocks.get(lang)
+  if (cached !== undefined) return cached
+  const value = new Intl.DateTimeFormat(LANGUAGE_LOCALES[lang], { hour: 'numeric' })
+    .resolvedOptions().hour12 === true
+  twelveHourClocks.set(lang, value)
+  return value
+}
 
 /** Looks up `key` in the given language and replaces its `{param}` placeholders. */
 export function translate(
