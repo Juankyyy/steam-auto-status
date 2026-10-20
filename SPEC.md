@@ -440,12 +440,21 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
    bandeja y aplica el estado correcto.
 7. Generar el instalador (`npm run build`, ~2,5 MB), instalarlo y verificar que los datos de
    `Documents\steam-auto-status\` se conservan y todo sigue funcionando. No debe quedar ningún
-   proceso `node.exe` ni carpeta `sidecar/` en la instalación.
+   proceso `node.exe` ni carpeta `sidecar/` en la instalación. Si `config.json` no tenía
+   `countdownPrecision`, debe aparecer con `"seconds"` al arrancar.
 8. Si vienes de la versión antigua, comprobar que Ajustes › Cliente de Steam detecta los
    restos (`auth.json`, `profile.json`, `steam-data/`), que la confirmación los borra y que
    `config.json` y `logs/` se conservan. Revocar el token en Steam es un paso manual.
 9. Cambiar el idioma en Ajustes › Aplicación y comprobar que interfaz, bandeja (menú y
    tooltip) y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
+10. Comprobar la ventana sin marco: arrastrarla desde la barra superior, minimizarla,
+    maximizarla y restaurarla (el icono cambia) y cerrarla. Al cerrar, la ventana desaparece
+    y la app sigue en la bandeja; al abrirla de nuevo se recrea sin marco.
+11. En Ajustes › Horario, apagar y encender el interruptor (los controles se bloquean),
+    editar las horas con los campos segmentados (24 h en español, 12 h AM/PM en inglés),
+    arrastrar los extremos de la franja en pasos de 5 min y probar una franja que cruce
+    medianoche. En Ajustes › Apariencia, cambiar la precisión de la cuenta atrás y comprobar
+    que el panel la aplica al momento.
 
 ## 8. Entorno
 
