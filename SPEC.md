@@ -42,7 +42,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 |---|---|
 | Núcleo | **Rust dentro de la app Tauri** (`src-tauri/src/`): horario, config, logs y control del cliente local; sin sidecar ni runtime de Node. Usa `chrono` y `windows-sys` (Toolhelp + ShellExecuteW) |
 | Shell de escritorio | **Tauri v2 (Rust)**: bandeja nativa + ventana WebView2. Electron descartado por peso (~150–250 MB permanentes en reposo) |
-| UI | **React + TypeScript + Tailwind CSS + shadcn/ui + lucide**; animaciones CSS puras (sin React Bits pesados) |
+| UI | **React + TypeScript + Tailwind CSS + shadcn/ui + lucide**; movimiento ligero con CSS (orbes, resplandor, header frosted, entrada de módulo), **AutoAnimate** para altas/bajas y **NumberFlow** para la cuenta atrás; sin React Bits, GSAP ni Motion |
 | Comunicación UI ↔ núcleo | **Comandos y eventos Tauri**; se conservan los nombres `sidecar_command` y `sidecar-message` por compatibilidad con la UI, pero ya no hay proceso ni stdin/stdout |
 | Datos | **`Documents\steam-auto-status\`** (ruta resuelta con la API de carpetas conocidas de Windows; configurable en ajustes) |
 | Distribución | `tauri build` → **instalador NSIS `.exe`** (~2,5 MB; ~12 MB instalado), sin firma de código |
@@ -183,6 +183,19 @@ y a la derecha el estado del cliente de Steam («Steam abierto / iniciando / cer
 hay cuenta, avatar ni botón de login. Junto al nombre de la app hay un badge con la
 versión (`vX.Y.Z`, inyectada en tiempo de build desde `tauri.conf.json`; es la misma
 fuente que usa «Acerca de»).
+
+**Movimiento:** la cabecera de navegación (bajo la barra de título) queda sticky dentro del
+área desplazable y pasa a un fondo frosted (`backdrop-blur` + fondo semitransparente) al hacer
+scroll; el contenido del módulo entra con una animación CSS breve
+al cambiar de pestaña (envoltorio con `key` por ruta, sin mover la cabecera). En el panel, el
+estado se refuerza con un orbe decorativo (verde que respira y emite un pulso cuando está
+Online, gris tranquilo cuando está Invisible, ámbar girando al iniciar Steam, rojo parpadeando
+si está cerrado), un resplandor de fondo que sigue al estado y un cambio de texto animado. La
+cuenta atrás usa **NumberFlow** para que los dígitos rueden y **AutoAnimate** suaviza la
+entrada/salida de avisos y badges. Son dos dependencias pequeñas (~3,2 KB y ~6 KB gzip); no se
+usan React Bits, GSAP ni Motion. Todo el movimiento decorativo se desactiva con
+`prefers-reduced-motion`; el orbe es `aria-hidden` y el texto sigue siendo la fuente de verdad
+accesible. NumberFlow y AutoAnimate respetan también esa preferencia por su cuenta.
 
 **Panel de control** (`/`): estado del cliente y resumen del horario:
 

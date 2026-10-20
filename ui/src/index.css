@@ -21,6 +21,10 @@
     --color-chart-3: var(--chart-3);
     --color-chart-2: var(--chart-2);
     --color-chart-1: var(--chart-1);
+    --color-status-online: var(--status-online);
+    --color-status-invisible: var(--status-invisible);
+    --color-status-starting: var(--status-starting);
+    --color-status-closed: var(--status-closed);
     --color-ring: var(--ring);
     --color-input: var(--input);
     --color-border: var(--border);
@@ -72,6 +76,10 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
+    --status-online: oklch(0.58 0.14 160);
+    --status-invisible: oklch(0.5 0.012 260);
+    --status-starting: oklch(0.62 0.13 80);
+    --status-closed: oklch(0.58 0.2 25);
     --radius: 0.625rem;
     --sidebar: oklch(0.985 0 0);
     --sidebar-foreground: oklch(0.145 0 0);
@@ -108,6 +116,10 @@
     --chart-3: oklch(0.439 0 0);
     --chart-4: oklch(0.371 0 0);
     --chart-5: oklch(0.269 0 0);
+    --status-online: oklch(0.78 0.16 160);
+    --status-invisible: oklch(0.64 0.012 260);
+    --status-starting: oklch(0.82 0.15 85);
+    --status-closed: oklch(0.68 0.19 25);
     --sidebar: oklch(0.205 0 0);
     --sidebar-foreground: oklch(0.985 0 0);
     --sidebar-primary: oklch(0.488 0.243 264.376);
@@ -150,6 +162,197 @@
   * {
     scrollbar-width: thin;
     scrollbar-color: color-mix(in oklch, var(--foreground) 25%, transparent) transparent;
+  }
+}
+
+/* ==========================================================================
+   Motion system
+   --------------------------------------------------------------------------
+   Loops live in CSS (cheap, compositor-friendly); React only decides which
+   state class is present. AutoAnimate handles add/remove of alerts and
+   NumberFlow animates the countdown digits. Everything below is disabled by
+   prefers-reduced-motion at the end of this file.
+   ========================================================================== */
+
+[data-status="online"] { --status-color: var(--status-online); }
+[data-status="invisible"] { --status-color: var(--status-invisible); }
+[data-status="starting"] { --status-color: var(--status-starting); }
+[data-status="closed"] { --status-color: var(--status-closed); }
+[data-status="loading"] { --status-color: var(--status-invisible); }
+
+.status-orb {
+  --orb-color: var(--status-color, var(--status-invisible));
+  position: relative;
+  isolation: isolate;
+  display: inline-grid;
+  place-items: center;
+  width: 2.75rem;
+  height: 2.75rem;
+  flex: none;
+}
+
+.status-orb__core {
+  position: relative;
+  z-index: 2;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  background-color: var(--orb-color);
+  box-shadow:
+    0 0 0 4px color-mix(in oklch, var(--orb-color) 16%, transparent),
+    0 0 18px color-mix(in oklch, var(--orb-color) 45%, transparent);
+  transition:
+    background-color 350ms ease,
+    border-color 350ms ease,
+    box-shadow 350ms ease;
+}
+
+.status-orb__halo {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 2rem;
+  height: 2rem;
+  border-radius: 999px;
+  background-color: color-mix(in oklch, var(--orb-color) 14%, transparent);
+  filter: blur(7px);
+  opacity: 0.7;
+  transition: background-color 350ms ease, opacity 350ms ease;
+}
+
+.status-orb__ping {
+  position: absolute;
+  inset: 0;
+  margin: auto;
+  width: 1rem;
+  height: 1rem;
+  border-radius: 999px;
+  border: 1px solid color-mix(in oklch, var(--orb-color) 65%, transparent);
+  opacity: 0;
+  pointer-events: none;
+}
+
+.status-orb[data-status="online"] .status-orb__core {
+  animation: status-breathe 3.2s ease-in-out infinite;
+}
+.status-orb[data-status="online"] .status-orb__ping {
+  animation: status-ping 2.8s cubic-bezier(0, 0, 0.2, 1) infinite;
+}
+.status-orb[data-status="invisible"] .status-orb__core {
+  animation: status-quiet 6s ease-in-out infinite;
+}
+.status-orb[data-status="invisible"] .status-orb__halo {
+  opacity: 0.35;
+}
+.status-orb[data-status="starting"] .status-orb__core {
+  width: 1.2rem;
+  height: 1.2rem;
+  background-color: transparent;
+  border: 2px solid color-mix(in oklch, var(--orb-color) 26%, transparent);
+  border-top-color: var(--orb-color);
+  box-shadow: 0 0 16px color-mix(in oklch, var(--orb-color) 32%, transparent);
+  animation: status-spin 1s linear infinite;
+}
+.status-orb[data-status="closed"] .status-orb__core {
+  animation: status-blip 2.4s ease-in-out infinite;
+}
+.status-orb[data-status="loading"] {
+  opacity: 0.55;
+}
+
+.status-aura {
+  position: absolute;
+  inset: -35% -10% auto -10%;
+  height: 120%;
+  pointer-events: none;
+  background: radial-gradient(
+    60% 100% at 18% 30%,
+    color-mix(in oklch, var(--status-color) 22%, transparent),
+    transparent 70%
+  );
+  opacity: 0.5;
+  animation: status-aura 12s ease-in-out infinite;
+  transition: background 500ms ease;
+}
+
+.status-swap {
+  animation: status-swap-in 280ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.status-dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 999px;
+  background-color: currentColor;
+  flex: none;
+}
+.status-dot--pulse {
+  animation: status-dot-pulse 3.2s ease-in-out infinite;
+}
+.status-dot--blink {
+  animation: status-blip 2.2s ease-in-out infinite;
+}
+
+@keyframes status-breathe {
+  0%, 100% { transform: scale(1); opacity: 0.92; }
+  50% { transform: scale(1.13); opacity: 1; }
+}
+@keyframes status-quiet {
+  0%, 100% { opacity: 0.68; }
+  50% { opacity: 0.9; }
+}
+@keyframes status-ping {
+  0% { transform: scale(0.7); opacity: 0.7; }
+  80%, 100% { transform: scale(2.9); opacity: 0; }
+}
+@keyframes status-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes status-blip {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.4; }
+}
+@keyframes status-aura {
+  0%, 100% { opacity: 0.4; transform: translate3d(-1%, -1%, 0) scale(1); }
+  50% { opacity: 0.65; transform: translate3d(1%, 1%, 0) scale(1.04); }
+}
+@keyframes status-dot-pulse {
+  0%, 100% {
+    opacity: 1;
+    box-shadow: 0 0 0 0 color-mix(in oklch, currentColor 45%, transparent);
+  }
+  50% {
+    opacity: 0.8;
+    box-shadow: 0 0 0 4px transparent;
+  }
+}
+@keyframes status-swap-in {
+  from { opacity: 0; transform: translateY(4px); filter: blur(2px); }
+  to { opacity: 1; transform: none; filter: none; }
+}
+/* Route entrance: the keyed wrapper in Layout replays this on each module
+   change, so the header never moves and the content arrives in one beat. */
+.page-enter {
+  animation: page-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+@keyframes page-in {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: none; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .status-orb *,
+  .status-aura,
+  .status-swap,
+  .status-dot--pulse,
+  .status-dot--blink {
+    animation: none !important;
+  }
+  .status-aura {
+    transition: none;
+  }
+  .page-enter {
+    animation: none !important;
   }
 }
 
