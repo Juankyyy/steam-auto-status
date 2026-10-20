@@ -7,7 +7,6 @@ import { ScheduleSettings } from '@/components/settings/ScheduleSettings'
 import { SettingsNav, type SettingsSectionId } from '@/components/settings/SettingsNav'
 import { SteamClientSettings } from '@/components/settings/SteamClientSettings'
 import { useAppContext } from '@/lib/app-context'
-import { useI18n } from '@/lib/i18n-context'
 
 /**
  * Settings module: one section at a time.
@@ -17,7 +16,6 @@ import { useI18n } from '@/lib/i18n-context'
  */
 export function Settings() {
   const { state } = useAppContext()
-  const { t } = useI18n()
   const [section, setSection] = useState<SettingsSectionId>('schedule')
 
   // Switching sections can leave the module scrolled if the previous panel was taller.
@@ -27,11 +25,8 @@ export function Settings() {
 
   return (
     <div className="mx-auto grid w-full max-w-4xl gap-5 min-[700px]:grid-cols-[180px_minmax(0,1fr)] min-[700px]:items-start min-[700px]:gap-6">
-      <aside className="grid gap-3">
+      <aside>
         <SettingsNav active={section} onChange={setSection} />
-        <p className="px-2 text-xs leading-relaxed text-muted-foreground min-[700px]:px-3">
-          {t('settings.autosave')}
-        </p>
       </aside>
 
       <div className="min-w-0 max-w-2xl">

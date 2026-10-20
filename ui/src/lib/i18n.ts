@@ -85,7 +85,6 @@ const es = {
 
   // ---------------------------------------------------------------- settings
   'settings.nav.label': 'Secciones de ajustes',
-  'settings.autosave': 'Los cambios se guardan automáticamente.',
 
   // ---------------------------------------------------------------- settings › schedule
   'settings.schedule.title': 'Horario',
@@ -269,7 +268,6 @@ const en: Record<keyof typeof es, string> = {
   'dev.noLogs': 'No log entries yet…',
 
   'settings.nav.label': 'Settings sections',
-  'settings.autosave': 'Changes are saved automatically.',
 
   'settings.schedule.title': 'Schedule',
   'settings.schedule.description':

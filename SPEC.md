@@ -230,9 +230,8 @@ sección activa es estado local de la UI: no añade rutas ni cambia el contrato 
   «Mantenimiento», vaciar `status.log`.
 - **Acerca de**: versión y enlaces al repositorio, última release e issues.
 
-La interfaz indica una vez que los cambios se guardan automáticamente. Los controles de
-configuración que antes vivían en el panel se han movido aquí; el panel conserva el resumen
-del horario y la pausa rápida.
+Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
+conserva el resumen del horario y la pausa rápida.
 
 **Idioma (es/en):** los textos de la interfaz viven en un diccionario tipado
 (`ui/src/lib/i18n.ts`): `es` es la fuente de los tipos y `en` debe completar exactamente las
