@@ -4,8 +4,19 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { Layout } from '@/components/Layout'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppContext, type AppContextValue } from '@/lib/app-context'
+import { setAppSuspended } from '@/lib/app-suspended'
 import { I18nContext, useI18nValue } from '@/lib/i18n-context'
-import { cmd, getCachedState, isHiddenLaunch, isTauri, onSidecarMessage, showMainWindow, type AppState } from '@/lib/tauri'
+import {
+  cmd,
+  getCachedState,
+  getWindowSuspended,
+  isHiddenLaunch,
+  isTauri,
+  onSidecarMessage,
+  onWindowSuspended,
+  showMainWindow,
+  type AppState,
+} from '@/lib/tauri'
 import { Dashboard } from '@/pages/Dashboard'
 import { Dev } from '@/pages/Dev'
 import { Settings } from '@/pages/Settings'
@@ -60,6 +71,40 @@ export default function App() {
         }
       } catch (e) {
         console.error('Failed to initialize panel:', e)
+      }
+    })()
+
+    return () => {
+      disposed = true
+      unlisten?.()
+    }
+  }, [])
+
+  // The shell suspends the panel while the window is minimized or hidden, where WebView2
+  // stops painting. Mirror it here so the countdown and CSS loops stop making the renderer
+  // wake up behind an invisible window.
+  useEffect(() => {
+    if (!isTauri) return
+
+    let disposed = false
+    let unlisten: (() => void) | undefined
+    let events = 0
+
+    void (async () => {
+      try {
+        unlisten = await onWindowSuspended((suspended) => {
+          events += 1
+          setAppSuspended(suspended)
+        })
+        if (disposed) {
+          unlisten()
+          return
+        }
+        const initial = await getWindowSuspended()
+        // An event received while the command was in flight is fresher than its result.
+        if (!disposed && events === 0) setAppSuspended(initial)
+      } catch (e) {
+        console.error('Failed to read the panel suspension state:', e)
       }
     })()
 

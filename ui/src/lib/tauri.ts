@@ -132,3 +132,20 @@ export async function onWindowResized(handler: () => void): Promise<() => void> 
   if (!isTauri) return () => {}
   return await getCurrentWindow().onResized(() => handler())
 }
+
+/**
+ * Subscribes to panel suspension changes: the Rust shell reports when the window is
+ * minimized or hidden so the UI can stop its timers and animations.
+ */
+export async function onWindowSuspended(
+  handler: (suspended: boolean) => void,
+): Promise<() => void> {
+  if (!isTauri) return () => {}
+  return await listen<boolean>('window-suspended', (e) => handler(e.payload))
+}
+
+/** Current suspension state, for the first load before any event arrives. */
+export async function getWindowSuspended(): Promise<boolean> {
+  if (!isTauri) return false
+  return await invoke<boolean>('window_suspended')
+}

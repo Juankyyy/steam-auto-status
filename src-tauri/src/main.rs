@@ -24,7 +24,7 @@ use tauri::image::Image;
 use tauri::menu::{CheckMenuItem, Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
 use tauri::{
-    AppHandle, Listener, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
+    AppHandle, Emitter, Listener, Manager, RunEvent, WebviewUrl, WebviewWindowBuilder, WindowEvent,
 };
 use tauri_plugin_autostart::ManagerExt as AutostartManagerExt;
 use tauri_plugin_clipboard_manager::ClipboardExt;
@@ -50,6 +50,11 @@ struct TrayMenuHandles {
     pause: CheckMenuItem<tauri::Wry>,
     autostart: CheckMenuItem<tauri::Wry>,
 }
+
+/// Last suspension state applied to the panel. Windows emits several `WM_SIZE` events per
+/// resize, so the WebView2 controller and the UI are only notified when the state changes.
+#[derive(Default)]
+struct WindowSuspension(Mutex<Option<bool>>);
 
 /// Tray menu labels per UI language. The tooltip comes from the core (which knows the
 /// next transition); the menu is composed here because it belongs to the shell.
@@ -236,19 +241,65 @@ fn update_tray(app: &AppHandle, state: &Value) {
     }
 }
 
+/// Applies a suspension state to the panel: WebView2 stops painting and the UI receives the
+/// event that pauses its timers. The last value is kept so a resize does not touch the
+/// controller on every `WM_SIZE`.
+fn set_window_suspended(app: &AppHandle, suspended: bool) {
+    let Some(state) = app.try_state::<WindowSuspension>() else {
+        return;
+    };
+    {
+        let mut last = state.0.lock().unwrap();
+        if *last == Some(suspended) {
+            return;
+        }
+        *last = Some(suspended);
+    }
+
+    // Tell the UI first: hiding the controller can make Chromium treat the page as hidden,
+    // and the panel must pause its own timers before that happens.
+    let _ = app.emit("window-suspended", suspended);
+
+    // WebView2 does not detect that its host window was minimized: without this the browser
+    // keeps producing frames (and burning GPU/CPU) behind a minimized or hidden window.
+    if let Some(window) = app.get_webview_window("main") {
+        let _ = window.with_webview(move |webview| unsafe {
+            let _ = webview.controller().SetIsVisible(!suspended);
+        });
+    }
+}
+
+/// Reads the real window state and suspends the panel while it is minimized or hidden.
+fn sync_window_suspension(app: &AppHandle) {
+    let Some(window) = app.get_webview_window("main") else {
+        return;
+    };
+    let suspended = window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true);
+    set_window_suspended(app, suspended);
+}
+
 fn attach_window_events(window: &tauri::WebviewWindow) {
     let w = window.clone();
-    window.on_window_event(move |event| {
-        if let WindowEvent::CloseRequested { api, .. } = event {
-            // Closing the window does NOT quit the app: it is destroyed to free WebView2.
+    window.on_window_event(move |event| match event {
+        // Closing the window does NOT quit the app: it is destroyed to free WebView2.
+        WindowEvent::CloseRequested { api, .. } => {
             api.prevent_close();
             let _ = w.destroy();
         }
+        // Windows sends `WM_SIZE` when the window is minimized, restored or resized; that is
+        // the moment to tell WebView2 whether it should keep painting.
+        WindowEvent::Resized(_) => sync_window_suspension(w.app_handle()),
+        _ => {}
     });
 }
 
 fn show_window(app: &AppHandle) {
     if let Some(w) = app.get_webview_window("main") {
+        // Wake the panel before restoring the window: the controller is shown first, so the
+        // first visible frame is already painted (no blank flash), and `show` alone would
+        // leave a minimized window iconified.
+        set_window_suspended(app, false);
+        let _ = w.unminimize();
         let _ = w.show();
         let _ = w.set_focus();
         return;
@@ -265,7 +316,10 @@ fn show_window(app: &AppHandle) {
         .visible(true)
         .build()
     {
-        Ok(w) => attach_window_events(&w),
+        Ok(w) => {
+            attach_window_events(&w);
+            set_window_suspended(app, false);
+        }
         Err(e) => shell_log(app, format!("Could not create the window: {e}")),
     }
 }
@@ -292,6 +346,23 @@ fn show_main_window(app: AppHandle) {
 #[tauri::command]
 fn launch_hidden() -> bool {
     std::env::args().any(|a| a == "--hidden")
+}
+
+/// true while the panel is minimized or hidden (the UI pauses its timers then).
+///
+/// The tracked value wins over the raw window state: `show`/`unminimize` are queued on the
+/// event loop, so a window command that was just issued may not be reflected by
+/// `is_visible()` yet. Falling back to the real state covers the first call before any sync.
+#[tauri::command]
+fn window_suspended(app: AppHandle) -> bool {
+    if let Some(state) = app.try_state::<WindowSuspension>() {
+        if let Some(suspended) = *state.0.lock().unwrap() {
+            return suspended;
+        }
+    }
+    app.get_webview_window("main")
+        .map(|window| window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true))
+        .unwrap_or(false)
 }
 
 #[tauri::command]
@@ -489,6 +560,7 @@ fn main() {
             sidecar_command,
             show_main_window,
             launch_hidden,
+            window_suspended,
             set_autostart,
             open_data_folder,
             open_steam,
@@ -498,6 +570,8 @@ fn main() {
         ])
         .setup(|app| {
             let handle = app.handle().clone();
+            // Tracks whether the panel is currently suspended (see `window-suspended`).
+            app.manage(WindowSuspension::default());
 
             // One side-effect listener for the events the core emits: it updates the tray
             // icon/menu and shows Windows notifications. The panel listens to the same
@@ -522,6 +596,11 @@ fn main() {
             if let Some(window) = app.get_webview_window("main") {
                 attach_window_events(&window);
             }
+
+            // The panel starts hidden (normal launch shows it from the UI; `--hidden` keeps
+            // it in the tray): suspend it right away so WebView2 does not paint behind a
+            // hidden window, then `show_window` resumes it.
+            sync_window_suspension(&handle);
 
             Ok(())
         })

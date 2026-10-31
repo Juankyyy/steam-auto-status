@@ -155,8 +155,13 @@ Ventanas resultantes por defecto (`days: [lun..vie]`):
   marca, versión y controles minimizar/maximizar-restaurar/cerrar; se arrastra desde la
   barra y el doble clic maximiza. Oculta por defecto (`--hidden`); se abre desde la
   bandeja; **se destruye al cerrar** (no solo se oculta) para liberar los procesos WebView2;
-  se recrea al reabrir. Cerrar nunca debe terminar el proceso; "Salir" solo desde la
-  bandeja. El redimensionado y el tamaño mínimo (720×520) se mantienen.
+  se recrea al reabrir. Mientras está **minimizada u oculta**, el shell oculta el
+  controlador WebView2 (`SetIsVisible(false)`) y la UI pausa temporizadores y animaciones:
+  el grupo WebView2 deja de consumir CPU (al restaurar se reanuda sin perder el estado).
+  Cerrar nunca debe terminar el proceso; "Salir" solo desde la bandeja. El redimensionado y
+  el tamaño mínimo (720×520) se mantienen. La suspensión viaja por un canal propio del shell
+  (`window_suspended` al cargar y evento `window-suspended` con un booleano), separado del
+  contrato del núcleo.
 - **Núcleo en proceso**: `main.rs` arranca el `Core` (hilos de detección cada 10 s,
   reevaluación cada 30 s y reintentos de arranque de Steam). No hay sidecar ni supervisor
   que reiniciar; un fallo del núcleo sería un fallo de la app.
@@ -369,16 +374,24 @@ antiguas, con valores no válidos o sin el campo reciben `"full"` al arrancar (e
 
 Mediciones y estimaciones durante el desarrollo (pueden variar):
 
-| Estado | RAM |
-|---|---|
-| App Tauri (proceso principal, release) | ~34–35 MB (medido en bandeja y con ventana; ~6,5 MB privados) |
-| Ventana abierta (procesos WebView2) | procesos temporales aparte, se liberan al destruirla |
+| Estado | RAM | CPU |
+|---|---|---|
+| App Tauri (proceso principal, release) | ~34–35 MB (medido en bandeja y con ventana; ~6,5 MB privados) | bajo |
+| Ventana abierta (procesos WebView2) | procesos temporales aparte, se liberan al destruirla | según la animación de la UI |
+| Ventana minimizada u oculta | WebView2 suspendido: los procesos siguen reservados | ≈ 0 % (renderer y GPU) |
 
 En reposo (ventana cerrada) queda solo el proceso principal ≈ **35 MB**. Ya no hay sidecar
 Node (~51 MB), así que el total baja de ~85 MB a ~34 MB. En desarrollo hay procesos extra
 (vite, wrappers de npm, CLI de Tauri) que no existen en la app instalada. Electron fue
 descartado por mantener toda su pila (~150–250 MB) incluso minimizado. Instalador medido:
 **2,49 MB**; disco instalado ≈ **12 MB**, sin runtime de Node ni recursos extra.
+
+Con la ventana minimizada u oculta, `main.rs` sincroniza el estado real de la ventana
+(`is_minimized() || !is_visible()`) con el controlador WebView2 y emite `window-suspended`;
+la UI detiene la cuenta atrás de 1 s y las animaciones CSS. WebView2 no detecta por sí solo
+la minimización del host, así que sin esta sincronización Chromium seguía pintando (≈ 3,7 %
+de CPU en el grupo WebView2 medido con la ventana minimizada). Con el cambio, la misma
+medición con la ventana minimizada da ≈ 0,03 % en total (GPU 0 %).
 
 ### 4.9 Identidad visual (logo e iconos)
 
@@ -461,8 +474,11 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 9. Cambiar el idioma en Ajustes › Aplicación y comprobar que interfaz, bandeja (menú y
    tooltip) y notificaciones cambian al momento, y que se mantiene tras reiniciar la app.
 10. Comprobar la ventana sin marco: arrastrarla desde la barra superior, minimizarla,
-    maximizarla y restaurarla (el icono cambia) y cerrarla. Al cerrar, la ventana desaparece
-    y la app sigue en la bandeja; al abrirla de nuevo se recrea sin marco.
+    maximizarla y restaurarla (el icono cambia) y cerrarla. Al minimizarla, el grupo WebView2
+    del Administrador de tareas debe bajar a ≈ 0 % de CPU; al restaurarla desde la barra de
+    tareas o desde "Abrir panel" debe responder y la cuenta atrás actualizarse. Al cerrar,
+    la ventana desaparece y la app sigue en la bandeja; al abrirla de nuevo se recrea sin
+    marco.
 11. En Ajustes › Horario, apagar y encender el interruptor (los controles se bloquean),
     editar las horas con los campos segmentados (24 h en español, 12 h AM/PM en inglés),
     arrastrar los extremos de la franja en pasos de 5 min y probar una franja que cruce

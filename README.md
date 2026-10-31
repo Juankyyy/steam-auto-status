@@ -57,7 +57,8 @@ status. No second session, no credentials, and nothing to remember before work o
   pointer moves.
 - **Ten times lighter**: A single native process idles at ~35 MB, the installer is ~2.5 MB and
   the installed app ~12 MB, with no Node runtime or background service. Built to stay open
-  24/7; the WebView processes are released when you close the window.
+  24/7; the WebView processes are released when you close the window and paused while it is
+  minimized.
 - **Tray-first, panel when you want it**: One-click overrides from the tray menu ("Online for
   30 min", "Invisible now", pause/resume) and optional Windows notifications on each change.
   Open the panel when you want to edit the schedule; the tray icon doubles as a status light:

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Countdown } from '@/components/Countdown'
 import { StatusOrb } from '@/components/StatusOrb'
+import { useAppSuspended } from '@/lib/app-suspended'
 import { formatClock, formatClockAt, type Translate } from '@/lib/i18n'
 import { useI18n } from '@/lib/i18n-context'
 import { steamStatus } from '@/lib/status'
@@ -38,14 +39,24 @@ function statusSubtitle(state: AppState | null, t: Translate, lang: 'es' | 'en')
 
 export function StatusPanel({ state }: { state: AppState | null }) {
   const { t, lang } = useI18n()
+  const suspended = useAppSuspended()
   const [now, setNow] = useState(() => Date.now())
   const [badgesRef] = useAutoAnimate<HTMLDivElement>({ duration: 220, easing: 'ease-out' })
   const [alertsRef] = useAutoAnimate<HTMLDivElement>({ duration: 220, easing: 'ease-out' })
 
+  // The countdown only ticks while the panel is visible: a suspended window would keep
+  // waking the renderer every second for nothing. Resuming refreshes it immediately.
   useEffect(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000)
-    return () => clearInterval(interval)
-  }, [])
+    if (suspended) return
+    const tick = () => setNow(Date.now())
+    // Refresh as soon as the panel comes back, without waiting for the first interval.
+    const first = setTimeout(tick, 0)
+    const interval = setInterval(tick, 1000)
+    return () => {
+      clearTimeout(first)
+      clearInterval(interval)
+    }
+  }, [suspended])
 
   const countdownMs = state?.paused ? null : state?.nextTransition ? state.nextTransition.at - now : null
   const next = state?.nextTransition ?? null

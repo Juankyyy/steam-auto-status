@@ -98,7 +98,8 @@ Ejecuta lo que aplique a lo tocado; no lo omitas:
 - **Contrato IPC** (detalle en SPEC §4.2): comandos `getState`, `getConfig`, `setConfig`,
   `forceState`, `clearForce`, `pause`, `resume`, `reapply`, `deleteLegacyData`,
   `getLogTail`, `clearLog`; eventos `state`, `log`, `logsCleared`, `configChanged` y
-  `notify`.
+  `notify`. La suspensión de la ventana (minimizada/oculta) va aparte, por el shell:
+  comando `window_suspended` y evento `window-suspended` con un booleano.
 - **Rust**: no cambies las reglas de bandeja/ventana sin actualizar SPEC (la ventana se
   destruye al cerrar, instancia única, temporizadores del núcleo). La detección de Steam usa
   Toolhelp y el envío usa `ShellExecuteW`; no vuelvas a introducir `cmd` ni un sidecar.

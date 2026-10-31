@@ -372,6 +372,18 @@
   }
 }
 
+/* ==========================================================================
+   Panel suspension
+   --------------------------------------------------------------------------
+   While the window is minimized or hidden the shell hides the WebView2
+   controller and the UI stops its timers. Pausing the CSS loops here keeps any
+   residual animation work at zero while the panel is not visible.
+   ========================================================================== */
+
+html[data-suspended] * {
+  animation-play-state: paused !important;
+}
+
 @layer base {
   * {
     @apply border-border outline-ring/50;
