@@ -42,7 +42,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 |---|---|
 | Núcleo | **Rust dentro de la app Tauri** (`src-tauri/src/`): horario, config, logs y control del cliente local; sin sidecar ni runtime de Node. Usa `chrono` y `windows-sys` (Toolhelp + ShellExecuteW) |
 | Shell de escritorio | **Tauri v2 (Rust)**: bandeja nativa + ventana WebView2. Electron descartado por peso (~150–250 MB permanentes en reposo) |
-| UI | **React + TypeScript + Tailwind CSS + shadcn/ui + lucide**; movimiento ligero con CSS (orbes, resplandor, header frosted, entrada de módulo), **AutoAnimate** para altas/bajas y **NumberFlow** para la cuenta atrás; sin React Bits, GSAP ni Motion |
+| UI | **React + TypeScript + Tailwind CSS + shadcn/ui + lucide**; movimiento ligero con CSS (orbes, header frosted, entrada de módulo), fondo de puntos en canvas, **AutoAnimate** para altas/bajas y **NumberFlow** para la cuenta atrás; sin React Bits, GSAP ni Motion |
 | Comunicación UI ↔ núcleo | **Comandos y eventos Tauri**; se conservan los nombres `sidecar_command` y `sidecar-message` por compatibilidad con la UI, pero ya no hay proceso ni stdin/stdout |
 | Datos | **`Documents\steam-auto-status\`** (ruta resuelta con la API de carpetas conocidas de Windows; configurable en ajustes) |
 | Distribución | `tauri build` → **instalador NSIS `.exe`** (~2,5 MB; ~12 MB instalado), sin firma de código |
@@ -187,15 +187,16 @@ fuente que usa «Acerca de»).
 **Movimiento:** la cabecera de navegación (bajo la barra de título) queda sticky dentro del
 área desplazable y pasa a un fondo frosted (`backdrop-blur` + fondo semitransparente) al hacer
 scroll; el contenido del módulo entra con una animación CSS breve
-al cambiar de pestaña (envoltorio con `key` por ruta, sin mover la cabecera). En el panel, el
-estado se refuerza con un orbe decorativo (verde que respira y emite un pulso cuando está
-Online, gris tranquilo cuando está Invisible, ámbar girando al iniciar Steam, rojo parpadeando
-si está cerrado), un resplandor de fondo que sigue al estado y un cambio de texto animado. La
-cuenta atrás usa **NumberFlow** para que los dígitos rueden y **AutoAnimate** suaviza la
-entrada/salida de avisos y badges. Son dos dependencias pequeñas (~3,2 KB y ~6 KB gzip); no se
-usan React Bits, GSAP ni Motion. Todo el movimiento decorativo se desactiva con
-`prefers-reduced-motion`; el orbe es `aria-hidden` y el texto sigue siendo la fuente de verdad
-accesible. NumberFlow y AutoAnimate respetan también esa preferencia por su cuenta.
+al cambiar de pestaña (envoltorio con `key` por ruta, sin mover la cabecera). En toda la app, el
+fondo es una rejilla de puntos que se tiñe con el color del estado y se ilumina alrededor del
+puntero. El texto del estado cambia con una animación breve. La cuenta atrás usa **NumberFlow**
+para que los dígitos rueden y **AutoAnimate** suaviza la entrada/salida de avisos y badges. Son
+dos dependencias pequeñas (~3,2 KB y ~6 KB gzip); no se usan React Bits, GSAP ni Motion. El fondo
+combina una rejilla CSS con una capa de puntos activos en un canvas 2D de ventana que solo se
+dibuja mientras el puntero se mueve; el bucle se apaga al asentarse. Con
+`prefers-reduced-motion` el fondo queda estático; el orbe y el fondo son `aria-hidden` y el texto
+sigue siendo la fuente de verdad accesible. NumberFlow y AutoAnimate respetan también esa
+preferencia por su cuenta.
 
 **Panel de control** (`/`): estado del cliente y resumen del horario:
 
@@ -226,7 +227,9 @@ sección activa es estado local de la UI: no añade rutas ni cambia el contrato 
   cada nombre en su idioma); el modo desarrollador queda al final, bajo un apartado
   «Avanzado». El idioma cambia al momento en interfaz, bandeja y notificaciones.
 - **Apariencia**: detalle de la cuenta atrás del panel (solo horas, horas y minutos u horas,
-  minutos y segundos); se aplica al momento.
+  minutos y segundos) y **Fondo de la aplicación** (Completo: rejilla de puntos en todas las
+  pestañas que sigue al puntero; Estático: solo rejilla; Apagado: sin fondo). Se aplican al
+  momento y el fondo persiste al cambiar de pestaña.
 - **Datos y registros**: ruta de datos, abrir la carpeta en el Explorador, copiar un
   diagnóstico (versión, estado y últimas líneas del registro) para reportar problemas y, en
   «Mantenimiento», vaciar `status.log`.
@@ -316,7 +319,8 @@ Ejemplo de `config.json`:
   "notifications": false,
   "devMode": false,
   "language": "es",
-  "countdownPrecision": "seconds"
+  "countdownPrecision": "seconds",
+  "appBackground": "full"
 }
 ```
 
@@ -333,6 +337,14 @@ segundos. El ajuste afecta solo a la UI (el núcleo sigue enviando `nextTransiti
 configs antiguas reciben el valor por defecto y se reescriben al arrancar. Con más de 24 h
 se mantienen los días por delante (`2 d 5 h 30 min 12 s`); si faltan menos unidades que la
 precisión elegida, se muestra la unidad menor para no enseñar un cero.
+
+`appBackground` (`"full"` | `"static"` | `"none"`, por defecto `"full"`) elige la rejilla de
+puntos de toda la aplicación: **Completo** (los puntos activos siguen al puntero en cualquier
+pestaña), **Estático** (solo la rejilla) o **Apagado** (sin fondo). Es un ajuste solo de UI: el
+tinte sale de `data-status` y el movimiento, las pausas y el respeto a `prefers-reduced-motion`
+viven en la interfaz. El núcleo lo valida, lo guarda y lo reemite en el estado; las configs
+antiguas, con valores no válidos o sin el campo reciben `"full"` al arrancar (el antiguo
+`cardBackground` se lee una vez para conservar el modo de la primera iteración).
 
 ### 4.7 Empaquetado
 
@@ -441,7 +453,8 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 7. Generar el instalador (`npm run build`, ~2,5 MB), instalarlo y verificar que los datos de
    `Documents\steam-auto-status\` se conservan y todo sigue funcionando. No debe quedar ningún
    proceso `node.exe` ni carpeta `sidecar/` en la instalación. Si `config.json` no tenía
-   `countdownPrecision`, debe aparecer con `"seconds"` al arrancar.
+   `countdownPrecision` ni `appBackground`, deben aparecer con `"seconds"` y `"full"` al
+   arrancar.
 8. Si vienes de la versión antigua, comprobar que Ajustes › Cliente de Steam detecta los
    restos (`auth.json`, `profile.json`, `steam-data/`), que la confirmación los borra y que
    `config.json` y `logs/` se conservan. Revocar el token en Steam es un paso manual.
@@ -455,6 +468,11 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
     arrastrar los extremos de la franja en pasos de 5 min y probar una franja que cruce
     medianoche. En Ajustes › Apariencia, cambiar la precisión de la cuenta atrás y comprobar
     que el panel la aplica al momento.
+12. En Ajustes › Apariencia, probar el fondo de la aplicación en Panel, Ajustes y
+    Desarrollador: **Completo** (los puntos siguen al puntero en toda la ventana, no se quedan
+    en el centro al salir y desaparecen al abandonar la ventana), **Estático** (solo rejilla)
+    y **Apagado** (sin fondo). Reiniciar y comprobar que se conserva; con «Efectos de
+    animación» desactivados en Windows el fondo queda estático.
 
 ## 8. Entorno
 

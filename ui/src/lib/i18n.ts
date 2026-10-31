@@ -135,12 +135,18 @@ const es = {
 
   // ---------------------------------------------------------------- settings › appearance
   'settings.appearance.title': 'Apariencia',
-  'settings.appearance.description': 'Detalle de la cuenta atrás del panel.',
+  'settings.appearance.description': 'Cuenta atrás y fondo de la aplicación.',
   'settings.appearance.countdown': 'Cuenta atrás',
   'settings.appearance.countdownHint': 'Unidades que se muestran en el contador del panel.',
   'settings.appearance.countdownHours': 'Horas',
   'settings.appearance.countdownMinutes': 'Horas y minutos',
   'settings.appearance.countdownSeconds': 'Horas, minutos y segundos',
+  'settings.appearance.background': 'Fondo de la aplicación',
+  'settings.appearance.backgroundHint':
+    'Rejilla de puntos en toda la app. Completo sigue al puntero; Estático la deja quieta; Apagado la quita.',
+  'settings.appearance.backgroundFull': 'Completo',
+  'settings.appearance.backgroundStatic': 'Estático',
+  'settings.appearance.backgroundOff': 'Apagado',
 
   // ---------------------------------------------------------------- settings › language
   'settings.language.title': 'Idioma',
@@ -316,12 +322,18 @@ const en: Record<keyof typeof es, string> = {
   'settings.app.advanced': 'Advanced',
 
   'settings.appearance.title': 'Appearance',
-  'settings.appearance.description': 'Dashboard countdown detail.',
+  'settings.appearance.description': 'Countdown and app background.',
   'settings.appearance.countdown': 'Countdown',
   'settings.appearance.countdownHint': 'Units shown in the dashboard countdown.',
   'settings.appearance.countdownHours': 'Hours',
   'settings.appearance.countdownMinutes': 'Hours & minutes',
   'settings.appearance.countdownSeconds': 'Hours, minutes & seconds',
+  'settings.appearance.background': 'App background',
+  'settings.appearance.backgroundHint':
+    'Dot grid across the app. Full follows the pointer; Static keeps it still; Off removes it.',
+  'settings.appearance.backgroundFull': 'Full',
+  'settings.appearance.backgroundStatic': 'Static',
+  'settings.appearance.backgroundOff': 'Off',
 
   'settings.language.title': 'Language',
   'settings.language.description':

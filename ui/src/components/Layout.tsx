@@ -1,10 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { LayoutDashboard, Settings, Terminal } from 'lucide-react'
 import { NavLink, Outlet, useLocation } from 'react-router'
+import { AppDotGrid } from '@/components/AppDotGrid'
 import { TitleBar } from '@/components/TitleBar'
 import { Badge } from '@/components/ui/badge'
 import { useAppContext } from '@/lib/app-context'
 import { useI18n } from '@/lib/i18n-context'
+import { steamStatus } from '@/lib/status'
 import type { AppState } from '@/lib/tauri'
 import { cn } from '@/lib/utils'
 
@@ -60,6 +62,7 @@ export function Layout() {
   const mainRef = useRef<HTMLElement>(null)
   const [scrolled, setScrolled] = useState(false)
   const navItems = state?.config.devMode ? [...NAV_ITEMS, DEV_NAV_ITEM] : NAV_ITEMS
+  const status = steamStatus(state)
 
   // Only the module area scrolls, so the frosted header follows that container
   // (not window.scrollY, which stays at 0 inside the fixed app shell).
@@ -78,13 +81,18 @@ export function Layout() {
   }, [location.pathname])
 
   return (
-    <div className="flex h-screen flex-col overflow-hidden bg-background text-foreground">
+    <div className="relative flex h-screen flex-col overflow-hidden bg-background text-foreground">
+      <AppDotGrid mode={state?.config.appBackground ?? 'full'} status={status} />
+
       {/* Window chrome stays fixed; only the module content scrolls. */}
-      <div className="shrink-0 bg-background">
+      <div className="relative z-10 shrink-0 bg-background">
         <TitleBar />
       </div>
 
-      <main ref={mainRef} className="min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]">
+      <main
+        ref={mainRef}
+        className="relative z-10 min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
+      >
         <header
           className={cn(
             'sticky top-0 z-40 flex flex-wrap items-center gap-x-4 gap-y-3 border-b px-6 py-3 transition-[background-color,border-color,box-shadow,backdrop-filter] duration-300',

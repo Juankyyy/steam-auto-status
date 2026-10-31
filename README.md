@@ -50,6 +50,11 @@ status. No second session, no credentials, and nothing to remember before work o
   has no reply).
 - **Countdown your way**: choose whether the dashboard countdown shows hours, hours and
   minutes, or hours, minutes and seconds (default), in **Settings › Appearance**.
+- **Dot-grid app background**: every tab sits on a fixed dot grid whose active dots light up
+  around the pointer in the current state colour. Without a pointer there is no spotlight at
+  all, never a static one in the middle. Choose **Full**, **Static** or **Off** in
+  **Settings › Appearance**; the active dots are painted on a viewport 2D canvas only while the
+  pointer moves.
 - **Ten times lighter**: A single native process idles at ~35 MB, the installer is ~2.5 MB and
   the installed app ~12 MB, with no Node runtime or background service. Built to stay open
   24/7; the WebView processes are released when you close the window.

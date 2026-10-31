@@ -5,11 +5,13 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent } from '@/components/ui/card'
 import { Countdown } from '@/components/Countdown'
-import { StatusOrb, type StatusOrbStatus } from '@/components/StatusOrb'
+import { StatusOrb } from '@/components/StatusOrb'
 import { formatClock, formatClockAt, type Translate } from '@/lib/i18n'
 import { useI18n } from '@/lib/i18n-context'
+import { steamStatus } from '@/lib/status'
 import { cmd, openSteam, type AppState } from '@/lib/tauri'
 
+/** Maps the core state to the label shown next to the orb. */
 function statusText(state: AppState | null, t: Translate): string {
   if (!state) return t('common.loading')
   if (!state.steamRunning) return t('steamClient.closed')
@@ -34,15 +36,6 @@ function statusSubtitle(state: AppState | null, t: Translate, lang: 'es' | 'en')
   return t('status.waiting')
 }
 
-/** Maps the core state to the visual state of the indicator. */
-function orbStatus(state: AppState | null): StatusOrbStatus {
-  if (!state) return 'loading'
-  if (!state.steamRunning) return 'closed'
-  if (state.steamStarting) return 'starting'
-  if (state.persona === 'online') return 'online'
-  return 'invisible'
-}
-
 export function StatusPanel({ state }: { state: AppState | null }) {
   const { t, lang } = useI18n()
   const [now, setNow] = useState(() => Date.now())
@@ -57,7 +50,7 @@ export function StatusPanel({ state }: { state: AppState | null }) {
   const countdownMs = state?.paused ? null : state?.nextTransition ? state.nextTransition.at - now : null
   const next = state?.nextTransition ?? null
   const cfg = state?.config ?? null
-  const orb = orbStatus(state)
+  const orb = steamStatus(state)
   const label = statusText(state, t)
   // The label is composed here (not in the core) so it follows the UI language and
   // time format, and the "no schedule" case is a real state check, not a string match.
@@ -72,7 +65,6 @@ export function StatusPanel({ state }: { state: AppState | null }) {
 
   return (
     <Card className="relative overflow-hidden" data-status={orb}>
-      <div className="status-aura" aria-hidden="true" />
       <CardContent className="relative z-10 flex flex-col gap-5 p-6">
         <div className="flex flex-wrap items-center gap-5">
           <StatusOrb status={orb} />

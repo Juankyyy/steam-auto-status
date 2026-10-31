@@ -24,6 +24,7 @@ pub struct Config {
     pub dev_mode: bool,
     pub language: String,
     pub countdown_precision: String,
+    pub app_background: String,
 }
 
 impl Default for Config {
@@ -44,6 +45,7 @@ impl Default for Config {
             dev_mode: false,
             language: detect_language(),
             countdown_precision: "seconds".into(),
+            app_background: "full".into(),
         }
     }
 }
@@ -84,11 +86,18 @@ pub fn load(data_dir: &Path) -> (Config, Vec<String>) {
     // Persist the detected language on first run (or after an invalid value) so the
     // first-run choice is stable and visible in config.json. Also rewrite configs from the
     // old login version so the obsolete machineName field disappears, and configs that
-    // predate the countdown preference so its default is visible too.
+    // predate newer preferences (countdown detail, app background) so their defaults are
+    // visible too.
     let persisted_language = parsed.get("language").and_then(Value::as_str);
     let persisted_precision = parsed.get("countdownPrecision").and_then(Value::as_str);
+    let persisted_background = parsed.get("appBackground").and_then(Value::as_str);
+    let legacy_background = parsed.get("cardBackground").and_then(Value::as_str);
+    let legacy_spotlight = parsed.get("cardSpotlight").is_some();
     if persisted_language != Some(config.language.as_str())
         || persisted_precision != Some(config.countdown_precision.as_str())
+        || persisted_background != Some(config.app_background.as_str())
+        || legacy_background.is_some()
+        || legacy_spotlight
         || parsed.get("machineName").is_some()
     {
         if let Err(e) = save(data_dir, &config) {
@@ -141,6 +150,7 @@ pub fn merge(base: &Config, overlay: &Value) -> Config {
             overlay,
             &defaults.countdown_precision,
         ),
+        app_background: app_background_field(base, overlay, &defaults.app_background),
     }
 }
 
@@ -183,6 +193,23 @@ fn countdown_precision_field(base: &Config, overlay: &Value, fallback: &str) -> 
     };
     match candidate.as_str() {
         "hours" | "minutes" | "seconds" => candidate,
+        _ => fallback.to_string(),
+    }
+}
+
+/// Dot-grid backdrop of the app. Invalid or legacy values fall back to `full`; the old
+/// `cardBackground` key is read once so a config from the previous iteration keeps its mode.
+fn app_background_field(base: &Config, overlay: &Value, fallback: &str) -> String {
+    let value = overlay
+        .get("appBackground")
+        .or_else(|| overlay.get("cardBackground"));
+    let candidate = match value {
+        Some(Value::String(value)) => value.trim().to_lowercase(),
+        Some(_) => String::new(),
+        None => base.app_background.trim().to_lowercase(),
+    };
+    match candidate.as_str() {
+        "full" | "static" | "none" => candidate,
         _ => fallback.to_string(),
     }
 }
@@ -255,6 +282,7 @@ mod tests {
         assert_eq!(merged.online_until, base.online_until);
         assert_eq!(merged.language, base.language);
         assert_eq!(merged.countdown_precision, base.countdown_precision);
+        assert_eq!(merged.app_background, base.app_background);
     }
 
     #[test]
@@ -269,7 +297,8 @@ mod tests {
                 "paused": 1,
                 "notifications": "",
                 "language": "EN",
-                "countdownPrecision": "MINUTES"
+                "countdownPrecision": "MINUTES",
+                "appBackground": "STATIC"
             }),
         );
         assert_eq!(merged.days, vec!["mon", "fri", "sun"]);
@@ -279,6 +308,7 @@ mod tests {
         assert!(!merged.notifications);
         assert_eq!(merged.language, "en");
         assert_eq!(merged.countdown_precision, "minutes");
+        assert_eq!(merged.app_background, "static");
     }
 
     #[test]
@@ -295,6 +325,36 @@ mod tests {
         assert_eq!(
             merge(&base, &json!({ "countdownPrecision": 3 })).countdown_precision,
             "seconds"
+        );
+    }
+
+    #[test]
+    fn merge_validates_app_background() {
+        let base = Config::default();
+        assert_eq!(
+            merge(&base, &json!({ "appBackground": "FULL" })).app_background,
+            "full"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "appBackground": "static" })).app_background,
+            "static"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "appBackground": "none" })).app_background,
+            "none"
+        );
+        // The old key is read once so a tested config keeps its mode.
+        assert_eq!(
+            merge(&base, &json!({ "cardBackground": "none" })).app_background,
+            "none"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "cardBackground": "aurora" })).app_background,
+            "full"
+        );
+        assert_eq!(
+            merge(&base, &json!({ "appBackground": 3 })).app_background,
+            "full"
         );
     }
 

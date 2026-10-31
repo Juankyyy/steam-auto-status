@@ -7,6 +7,8 @@ export type Day = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun'
 export type Language = 'es' | 'en'
 /** Smallest unit shown by the dashboard countdown. */
 export type CountdownPrecision = 'hours' | 'minutes' | 'seconds'
+/** Dot-grid backdrop of the app shell. */
+export type AppBackground = 'full' | 'static' | 'none'
 
 export interface Config {
   days: Day[]
@@ -18,6 +20,7 @@ export interface Config {
   devMode: boolean
   language: Language
   countdownPrecision: CountdownPrecision
+  appBackground: AppBackground
 }
 
 export interface AppState {
