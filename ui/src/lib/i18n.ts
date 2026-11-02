@@ -16,6 +16,7 @@ const es = {
   'common.invisible': 'Invisible',
   'common.noSchedule': 'Sin programación',
   'common.cancel': 'Cancelar',
+  'common.close': 'Cerrar',
 
   // ---------------------------------------------------------------- header
   'nav.dashboard': 'Panel de control',
@@ -99,9 +100,14 @@ const es = {
   'settings.schedule.onlineFor': '{duration} conectado',
   'settings.schedule.days': 'Días',
   'settings.schedule.daysHint':
-    'Marca el día en que empieza cada franja; si termina al día siguiente, sigue activa.',
+    'Marca el día en que empieza cada franja; si termina al día siguiente, sigue activa. Cada día solo puede estar en un horario.',
   'settings.schedule.allDayHint':
     'Cubre desde las 00:00 hasta las 24:00 de los días marcados.',
+  'settings.schedule.dayInUseTitle': 'Día ya en uso',
+  'settings.schedule.dayInUse':
+    '{day} ya está en el horario «{schedule}». Quítalo de ese horario para usarlo aquí.',
+  'settings.schedule.dayInUseHint':
+    '{day} ya está en «{schedule}»; no se puede añadir aquí.',
   'settings.schedule.toggle': 'Activar automatización',
   'settings.schedule.enabledHint':
     'Cuando está desactivado, la app deja de cambiar tu estado; el actual se mantiene.',
@@ -230,6 +236,7 @@ const en: Record<keyof typeof es, string> = {
   'common.invisible': 'Invisible',
   'common.noSchedule': 'No schedule',
   'common.cancel': 'Cancel',
+  'common.close': 'Close',
 
   'nav.dashboard': 'Dashboard',
   'nav.settings': 'Settings',
@@ -305,8 +312,13 @@ const en: Record<keyof typeof es, string> = {
   'settings.schedule.onlineFor': '{duration} online',
   'settings.schedule.days': 'Days',
   'settings.schedule.daysHint':
-    'Pick the day each window starts; a window that ends after midnight stays active.',
+    'Pick the day each window starts; a window that ends after midnight stays active. Each day can belong to only one schedule.',
   'settings.schedule.allDayHint': 'Covers 00:00–24:00 on the selected days.',
+  'settings.schedule.dayInUseTitle': 'Day already in use',
+  'settings.schedule.dayInUse':
+    '{day} is already in the "{schedule}" schedule. Remove it there to use it here.',
+  'settings.schedule.dayInUseHint':
+    '{day} is already in "{schedule}"; it cannot be added here.',
   'settings.schedule.toggle': 'Enable automation',
   'settings.schedule.enabledHint':
     'When off, the app stops changing your status; it stays as it is.',

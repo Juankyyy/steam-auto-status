@@ -2,10 +2,11 @@ import { useEffect, useMemo, useState } from 'react'
 import type { ReactNode } from 'react'
 import { HashRouter, Navigate, Route, Routes } from 'react-router'
 import { Layout } from '@/components/Layout'
+import { Toaster } from '@/components/ui/toast'
 import { TooltipProvider } from '@/components/ui/tooltip'
 import { AppContext, type AppContextValue } from '@/lib/app-context'
 import { setAppSuspended } from '@/lib/app-suspended'
-import { I18nContext, useI18nValue } from '@/lib/i18n-context'
+import { I18nContext, useI18n, useI18nValue } from '@/lib/i18n-context'
 import {
   cmd,
   getCachedState,
@@ -25,6 +26,12 @@ import { Settings } from '@/pages/Settings'
 function I18nProvider({ children }: { children: ReactNode }) {
   const i18n = useI18nValue()
   return <I18nContext.Provider value={i18n}>{children}</I18nContext.Provider>
+}
+
+/** Toast host inside the language provider so its close button follows the app language. */
+function ToastHost() {
+  const { t } = useI18n()
+  return <Toaster closeLabel={t('common.close')} />
 }
 
 export default function App() {
@@ -133,6 +140,7 @@ export default function App() {
               </Route>
             </Routes>
           </HashRouter>
+          <ToastHost />
         </I18nProvider>
       </AppContext.Provider>
     </TooltipProvider>

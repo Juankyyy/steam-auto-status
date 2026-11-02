@@ -3,6 +3,7 @@
 //! Ported from the old Node sidecar (`sidecar/src/index.ts`). Legacy single-window configs
 //! are migrated to the current `windows` list on load.
 
+use std::collections::HashSet;
 use std::fs;
 use std::path::{Path, PathBuf};
 
@@ -175,19 +176,35 @@ fn windows_field(
     overlay: &Value,
     defaults: &[ScheduleWindow],
 ) -> Vec<ScheduleWindow> {
-    if let Some(value) = overlay.get("windows") {
-        return parse_windows(value, defaults);
-    }
+    let mut windows = if let Some(value) = overlay.get("windows") {
+        parse_windows(value, defaults)
+    } else {
+        let has_legacy = ["days", "onlineFrom", "onlineUntil"]
+            .iter()
+            .any(|key| overlay.get(*key).is_some());
+        if has_legacy {
+            let fallback = defaults.first().cloned().unwrap_or_else(default_window);
+            vec![legacy_window(base, overlay, &fallback)]
+        } else {
+            base.windows.clone()
+        }
+    };
 
-    let has_legacy = ["days", "onlineFrom", "onlineUntil"]
-        .iter()
-        .any(|key| overlay.get(*key).is_some());
-    if has_legacy {
-        let fallback = defaults.first().cloned().unwrap_or_else(default_window);
-        return vec![legacy_window(base, overlay, &fallback)];
-    }
+    dedupe_days(&mut windows);
+    windows
+}
 
-    base.windows.clone()
+/// A day can belong to only one schedule. Older configs or manual edits may repeat a day;
+/// repairing them must not turn a timed day into an all-day one, so concrete windows claim
+/// their days first. Within the same kind, the first window keeps the day.
+fn dedupe_days(windows: &mut [ScheduleWindow]) {
+    let mut seen = HashSet::new();
+    for window in windows.iter_mut().filter(|window| !window.all_day) {
+        window.days.retain(|day| seen.insert(day.clone()));
+    }
+    for window in windows.iter_mut().filter(|window| window.all_day) {
+        window.days.retain(|day| seen.insert(day.clone()));
+    }
 }
 
 fn parse_windows(value: &Value, defaults: &[ScheduleWindow]) -> Vec<ScheduleWindow> {
@@ -508,6 +525,55 @@ mod tests {
             &json!({ "windows": [{ "days": ["sat"], "allDay": "" }] }),
         );
         assert!(!falsy.windows[0].all_day);
+    }
+
+    #[test]
+    fn merge_keeps_each_day_in_one_window() {
+        let base = Config::default();
+        let merged = merge(
+            &base,
+            &json!({
+                "windows": [
+                    {
+                        "days": ["fri", "sat", "sat"],
+                        "from": "17:00",
+                        "until": "02:00"
+                    },
+                    {
+                        "days": ["fri", "sun"],
+                        "from": "10:00",
+                        "until": "12:00"
+                    }
+                ]
+            }),
+        );
+        assert_eq!(merged.windows[0].days, vec!["fri", "sat"]);
+        assert_eq!(merged.windows[1].days, vec!["sun"]);
+    }
+
+    #[test]
+    fn merge_prefers_timed_window_over_all_day_for_repeated_day() {
+        let base = Config::default();
+        let merged = merge(
+            &base,
+            &json!({
+                "windows": [
+                    {
+                        "days": ["fri", "sat"],
+                        "allDay": true,
+                        "from": "00:00",
+                        "until": "00:00"
+                    },
+                    {
+                        "days": ["fri"],
+                        "from": "17:00",
+                        "until": "02:00"
+                    }
+                ]
+            }),
+        );
+        assert_eq!(merged.windows[0].days, vec!["sat"]);
+        assert_eq!(merged.windows[1].days, vec!["fri"]);
     }
 
     #[test]

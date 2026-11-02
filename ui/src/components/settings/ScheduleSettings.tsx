@@ -9,6 +9,7 @@ import { Switch } from '@/components/ui/switch'
 import { useI18n } from '@/lib/i18n-context'
 import { DAY_ORDER, formatDayRange, windowMinutes } from '@/lib/schedule'
 import { cmd, type AppState, type Day, type ScheduleWindow } from '@/lib/tauri'
+import { toast } from '@/lib/toast'
 import { cn } from '@/lib/utils'
 
 const FALLBACK_WINDOW: ScheduleWindow = {
@@ -50,6 +51,22 @@ export function ScheduleSettings({ state }: ScheduleSettingsProps) {
     const window = windows[index]
     if (!enabled || !window) return
     const has = window.days.includes(day)
+    if (!has) {
+      const owner = windows.find((other, i) => i !== index && other.days.includes(day))
+      if (owner) {
+        toast.add({
+          id: 'schedule-day-in-use',
+          type: 'warning',
+          title: t('settings.schedule.dayInUseTitle'),
+          description: t('settings.schedule.dayInUse', {
+            day: t(`day.${day}`),
+            schedule: formatDayRange(owner.days, t),
+          }),
+          timeout: 6000,
+        })
+        return
+      }
+    }
     const days = DAY_ORDER.filter((d) => (d === day ? !has : window.days.includes(d)))
     updateWindow(index, { days }, true)
   }
@@ -115,6 +132,7 @@ export function ScheduleSettings({ state }: ScheduleSettingsProps) {
               key={index}
               index={index}
               window={window}
+              otherWindows={windows.filter((_, i) => i !== index)}
               enabled={enabled}
               onChange={(changes, persist) => updateWindow(index, changes, persist)}
               onToggleDay={(day) => toggleDay(index, day)}
@@ -145,6 +163,7 @@ export function ScheduleSettings({ state }: ScheduleSettingsProps) {
 type ScheduleCardProps = {
   index: number
   window: ScheduleWindow
+  otherWindows: ScheduleWindow[]
   enabled: boolean
   onChange: (changes: Partial<ScheduleWindow>, persist: boolean) => void
   onToggleDay: (day: Day) => void
@@ -155,6 +174,7 @@ type ScheduleCardProps = {
 function ScheduleCard({
   index,
   window,
+  otherWindows,
   enabled,
   onChange,
   onToggleDay,
@@ -270,18 +290,44 @@ function ScheduleCard({
         <div className="flex flex-wrap gap-2">
           {DAY_ORDER.map((day) => {
             const active = window.days.includes(day)
+            // Keep the button clickable (not native-disabled) so its click can explain
+            // why the day cannot be selected with a warning toast.
+            const owner = active
+              ? undefined
+              : otherWindows.find((other) => other.days.includes(day))
+            const unavailable = !!owner
+            const ownerHint = owner
+              ? t('settings.schedule.dayInUseHint', {
+                  day: t(`day.${day}`),
+                  schedule: formatDayRange(owner.days, t),
+                })
+              : undefined
             return (
               <Button
                 key={day}
                 type="button"
                 size="sm"
                 variant={active ? 'default' : 'outline'}
-                className={cn('w-12', !active && 'text-muted-foreground')}
+                className={cn(
+                  'relative w-12',
+                  !active && 'text-muted-foreground',
+                  unavailable &&
+                    'border-dashed border-status-starting/60 text-muted-foreground/70',
+                )}
                 disabled={!enabled}
                 aria-pressed={active}
+                aria-disabled={unavailable}
+                aria-label={ownerHint}
+                title={ownerHint}
                 onClick={() => onToggleDay(day)}
               >
                 {t(`day.${day}`)}
+                {unavailable && (
+                  <span
+                    aria-hidden="true"
+                    className="absolute right-1 top-1 size-1.5 rounded-full bg-status-starting"
+                  />
+                )}
               </Button>
             )
           })}

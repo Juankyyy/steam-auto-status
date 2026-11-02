@@ -34,6 +34,8 @@ status. No second session, no credentials, and nothing to remember before work o
   outside all of them. Give weekdays and weekends different days and hours on a draggable
   24-hour strip, including overnight windows, or mark a schedule **All day** with one
   switch (default: Monday–Friday, 17:30 → 01:00).
+- **One schedule per day**: A day can belong to only one schedule. Reusing one is blocked,
+  and a warning toast points to the schedule that already has it.
 - **No login, no session**: The app doesn't sign in, store a token or create a second Steam
   session. It asks the official client that is already open to change its own status, using
   the same local commands as the Friends → Status menu; it doesn't even know which account is

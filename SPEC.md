@@ -248,10 +248,12 @@ sección activa es estado local de la UI: no añade rutas ni cambia el contrato 
   se ocultan las horas y la franja, y el bloque cubre `00:00 → 24:00` de sus días. El título
   muestra el rango de días («Lun–Vie», «Sáb–Dom»). «Añadir horario» crea un bloque con los
   días que no usa ningún otro (con L–V existente, S–D) y copia las horas y el modo del
-  último; si no queda ninguno, aparece un estado vacío con el botón de añadir. El
-  interruptor de la cabecera activa o desactiva **toda** la automatización (equivale a
-  pausar o reanudar); mientras está desactivado, los controles quedan bloqueados y
-  atenuados.
+  último; si no queda ninguno, aparece un estado vacío con el botón de añadir. Un día solo
+  puede pertenecer a un horario: si ya está en otro, el botón se marca con borde discontinuo
+  y punto ámbar y, al pulsarlo, un toast warning (Base UI de shadcn) abajo a la derecha
+  indica qué horario lo usa sin modificar la configuración. El interruptor de la cabecera activa o desactiva
+  **toda** la automatización (equivale a pausar o reanudar); mientras está desactivado, los
+  controles quedan bloqueados y atenuados.
 - **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
   estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
   antigua (`auth.json`, `profile.json`, `steam-data/`), un bloque de limpieza con
@@ -369,6 +371,10 @@ del día de inicio; las horas se conservan para cuando se desactive. Una lista v
 a no tener programación: siempre Invisible. Las configuraciones antiguas con
 `days`/`onlineFrom`/`onlineUntil` se migran al arrancar a un único bloque; los bloques sin
 `allDay` reciben `false` y todo se reescribe con la forma nueva.
+
+Los días no se repiten entre bloques. Al cargar una configuración con días duplicados se
+reparan: un horario con horas concretas conserva el día frente a uno de «Todo el día»; si
+ambos son del mismo tipo, lo conserva el primero.
 
 `machineName` ya no existe: la app no reporta una máquina propia; usa la sesión normal del
 cliente de Steam.
@@ -528,8 +534,10 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
     borrar un horario y comprobar que el primero sigue funcionando. Activar «Todo el día» en
     un bloque y comprobar que cubre el día completo, que al desactivarlo vuelven las horas
     anteriores y que con todos los días en «Todo el día» el panel muestra «Sin próximo
-    cambio». En Ajustes › Apariencia, cambiar la precisión de la cuenta atrás y comprobar que
-    el panel la aplica al momento.
+    cambio». Intentar añadir a un horario un día que ya está en otro: no debe cambiar la
+    configuración y debe aparecer el toast warning abajo a la derecha; quitarlo del horario
+    original debe dejarlo disponible. En Ajustes › Apariencia, cambiar la precisión de la
+    cuenta atrás y comprobar que el panel la aplica al momento.
 12. En Ajustes › Apariencia, probar el fondo de la aplicación en Panel, Ajustes y
     Desarrollador: **Completo** (los puntos siguen al puntero en toda la ventana, no se quedan
     en el centro al salir y desaparecen al abandonar la ventana), **Estático** (solo rejilla)
