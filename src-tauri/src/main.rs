@@ -361,7 +361,9 @@ fn window_suspended(app: AppHandle) -> bool {
         }
     }
     app.get_webview_window("main")
-        .map(|window| window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true))
+        .map(|window| {
+            window.is_minimized().unwrap_or(false) || !window.is_visible().unwrap_or(true)
+        })
         .unwrap_or(false)
 }
 
