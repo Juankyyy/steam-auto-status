@@ -25,7 +25,7 @@ status. No second session, no credentials, and nothing to remember before work o
 ## 📸 Screenshot
 
 <p align="center">
-  <a href="assets/screenshots/main-screenshot.jpg"><img src="assets/screenshots/main-screenshot.jpg" alt="Steam Auto Status dashboard and schedule"></a>
+  <a href="assets/screenshots/main-screenshot.png"><img src="assets/screenshots/main-screenshot.png" alt="Steam Auto Status dashboard and schedule settings"></a>
 </p>
 
 ## ✨ Features
@@ -58,10 +58,10 @@ status. No second session, no credentials, and nothing to remember before work o
   all, never a static one in the middle. Choose **Full**, **Static** or **Off** in
   **Settings › Appearance**; the active dots are painted on a viewport 2D canvas only while the
   pointer moves.
-- **Ten times lighter**: A single native process idles at ~35 MB, the installer is ~2.5 MB and
-  the installed app ~12 MB, with no Node runtime or background service. Built to stay open
-  24/7; the WebView processes are released when you close the window and paused while it is
-  minimized.
+- **Light by design**: In the tray the app idles at ~35 MB; the installer is ~2.5 MB and the
+  installed app ~12 MB, with no Node runtime or background service. Built to stay open 24/7;
+  WebView2 processes exist only while the window is open, and closing the window releases
+  them (minimizing pauses them).
 - **Tray-first, panel when you want it**: One-click overrides from the tray menu ("Online for
   30 min", "Invisible now", pause/resume) and optional Windows notifications on each change.
   Open the panel when you want to edit the schedule; the tray icon doubles as a status light:
@@ -92,8 +92,8 @@ schedule as soon as the client is signed in.
 ### 3. Forget about it
 
 The app lives in the tray and switches your presence on schedule. Open the panel any time
-to adjust each schedule's days and hours, mark a schedule as all day, enable or disable
-the schedule, or change notifications.
+to adjust each schedule's days and hours, mark a schedule as all day, pause or resume
+automation, or change notifications.
 
 ## ⚙️ How it works
 
@@ -117,8 +117,8 @@ seconds to fight manual changes.
 
 ## 🔐 Your data
 
-- Everything is stored **locally** in `Documents\steam-auto-status\` (config and logs),
-  never in AppData. The folder is configurable from the settings panel.
+- Your settings and logs live **locally** in `Documents\steam-auto-status\`; the folder is
+  configurable from **Settings › Data & logs**.
 - The app stores **no credentials and no token** and needs no network connection.
 - If you used an older version, it may have left `auth.json`, `profile.json` and
   `steam-data/` behind. This version never reads them; you can delete them from
@@ -137,7 +137,8 @@ Check four things:
    "Steam closed", open Steam and wait a few seconds; the app applies the schedule when it
    appears.
 2. **The app is running**: look for the tray icon.
-3. **A schedule covers the current time**: panel → Schedule (overnight windows included).
+3. **A schedule covers the current time**: **Settings › Schedule** (overnight windows
+   included).
 4. **Force a resend**: if the panel says "Could not change the status", or you changed your
    status by hand, press **Reapply now** (in the panel alert or **Settings › Steam client**).
 
@@ -165,6 +166,26 @@ lines) and [open an issue](https://github.com/Juankyyy/steam-auto-status/issues)
 No. Without a session of its own, the app needs the official Steam client running. If Steam
 is closed you are already Offline; the app warns you and applies the schedule as soon as the
 client starts. This is the deliberate trade-off for not logging in or storing a token.
+
+</details>
+
+<details>
+<summary><strong>Can I use different hours on weekdays and weekends?</strong></summary>
+
+Yes. Add a second schedule in **Settings › Schedule**: with the default Mon–Fri block in
+place, **Add schedule** proposes Sat–Sun. You are Online while any schedule is active.
+
+A day can belong to only one schedule, so a split shift on the same day (for example
+09:00–12:00 and 18:00–23:00) isn't supported; the app warns you if you try to reuse a day.
+
+</details>
+
+<details>
+<summary><strong>Can a schedule cover the whole day?</strong></summary>
+
+Yes. Turn on **All day** in that schedule: it covers 00:00–24:00 on its selected days and
+keeps the previous hours for when you turn it off. With all seven days in **All day** mode,
+you stay Online and the dashboard shows **No upcoming change**.
 
 </details>
 
