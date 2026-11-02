@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 
 const FALLBACK_WINDOW: ScheduleWindow = {
   days: ['mon', 'tue', 'wed', 'thu', 'fri'],
+  allDay: false,
   from: '17:30',
   until: '01:00',
 }
@@ -66,6 +67,7 @@ export function ScheduleSettings({ state }: ScheduleSettingsProps) {
     const last = windows[windows.length - 1]
     const next: ScheduleWindow = {
       days,
+      allDay: last?.allDay ?? FALLBACK_WINDOW.allDay,
       from: last?.from ?? FALLBACK_WINDOW.from,
       until: last?.until ?? FALLBACK_WINDOW.until,
     }
@@ -160,16 +162,17 @@ function ScheduleCard({
 }: ScheduleCardProps) {
   const { t } = useI18n()
   const titleId = `schedule-window-${index}`
+  const allDayId = `schedule-${index}-all-day`
   const dayRange = formatDayRange(window.days, t)
   const noDays = window.days.length === 0
-  const noWindow = windowMinutes(window.from, window.until) === 0
+  const noWindow = !window.allDay && windowMinutes(window.from, window.until) === 0
 
   return (
     <section
       aria-labelledby={titleId}
       className="grid gap-4 rounded-xl border border-border/70 bg-muted/20 p-4"
     >
-      <div className="flex items-start justify-between gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-x-3 gap-y-2">
         <h3
           id={titleId}
           className={cn(
@@ -180,53 +183,85 @@ function ScheduleCard({
         >
           {dayRange}
         </h3>
-        <Button
-          type="button"
-          size="icon-sm"
-          variant="ghost"
-          className="text-muted-foreground hover:text-destructive"
-          aria-label={t('settings.schedule.remove', { days: dayRange })}
-          title={t('settings.schedule.remove', { days: dayRange })}
-          disabled={!enabled}
-          onClick={onRemove}
+        <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2">
+            <Label
+              htmlFor={allDayId}
+              className={cn(
+                'cursor-pointer text-xs text-muted-foreground transition-opacity duration-200',
+                !enabled && 'pointer-events-none opacity-50',
+              )}
+            >
+              {t('schedule.allDay')}
+            </Label>
+            <Switch
+              id={allDayId}
+              checked={window.allDay}
+              disabled={!enabled}
+              onCheckedChange={(checked) => onChange({ allDay: checked }, true)}
+            />
+          </div>
+          <Button
+            type="button"
+            size="icon-sm"
+            variant="ghost"
+            className="text-muted-foreground hover:text-destructive"
+            aria-label={t('settings.schedule.remove', { days: dayRange })}
+            title={t('settings.schedule.remove', { days: dayRange })}
+            disabled={!enabled}
+            onClick={onRemove}
+          >
+            <Trash2 aria-hidden="true" />
+          </Button>
+        </div>
+      </div>
+
+      {window.allDay ? (
+        <p
+          className={cn(
+            'text-xs text-muted-foreground transition-opacity duration-200',
+            !enabled && 'opacity-50',
+          )}
         >
-          <Trash2 aria-hidden="true" />
-        </Button>
-      </div>
+          {t('settings.schedule.allDayHint')}
+        </p>
+      ) : (
+        <>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <TimeField
+              id={`schedule-${index}-from`}
+              label={t('settings.schedule.from')}
+              value={window.from}
+              disabled={!enabled}
+              onCommit={(value) => onChange({ from: value }, true)}
+            />
+            <TimeField
+              id={`schedule-${index}-until`}
+              label={t('settings.schedule.until')}
+              value={window.until}
+              disabled={!enabled}
+              onCommit={(value) => onChange({ until: value }, true)}
+            />
+          </div>
 
-      <div className="grid gap-4 sm:grid-cols-2">
-        <TimeField
-          id={`schedule-${index}-from`}
-          label={t('settings.schedule.from')}
-          value={window.from}
-          disabled={!enabled}
-          onCommit={(value) => onChange({ from: value }, true)}
-        />
-        <TimeField
-          id={`schedule-${index}-until`}
-          label={t('settings.schedule.until')}
-          value={window.until}
-          disabled={!enabled}
-          onCommit={(value) => onChange({ until: value }, true)}
-        />
-      </div>
+          <p
+            className={cn(
+              'text-xs text-muted-foreground transition-opacity duration-200',
+              !enabled && 'opacity-50',
+            )}
+          >
+            {t('settings.schedule.timeHint')}
+          </p>
 
-      <p
-        className={cn(
-          'text-xs text-muted-foreground transition-opacity duration-200',
-          !enabled && 'opacity-50',
-        )}
-      >
-        {t('settings.schedule.timeHint')}
-      </p>
-
-      <ScheduleWindowBar
-        from={window.from}
-        until={window.until}
-        disabled={!enabled}
-        onDraft={(from, until) => onChange({ from, until }, false)}
-        onCommit={(from, until) => onChange({ from, until }, true)}
-      />
+          <ScheduleWindowBar
+            from={window.from}
+            until={window.until}
+            disabled={!enabled}
+            onDraft={(from, until) => onChange({ from, until }, false)}
+            onCommit={(from, until) => onChange({ from, until }, true)}
+          />
+        </>
+      )}
 
       <div className="grid gap-2">
         <Label className={cn('transition-opacity duration-200', !enabled && 'opacity-50')}>

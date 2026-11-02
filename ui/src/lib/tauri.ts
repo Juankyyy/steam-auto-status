@@ -13,6 +13,8 @@ export type AppBackground = 'full' | 'static' | 'none'
 /** One recurring Online window; `days` are the days on which it starts. */
 export interface ScheduleWindow {
   days: Day[]
+  /** Ignore the times and cover the whole selected day (00:00 → 24:00). */
+  allDay: boolean
   from: string
   until: string
 }

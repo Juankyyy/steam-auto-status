@@ -43,9 +43,10 @@ export async function buildDiagnostics(
           state.config.windows.length === 0
             ? t('common.noSchedule')
             : state.config.windows
-                .map(
-                  (window) =>
-                    `${formatDayRange(window.days, t)} ${formatClock(window.from, lang)}→${formatClock(window.until, lang)}`,
+                .map((window) =>
+                  window.allDay
+                    ? `${formatDayRange(window.days, t)} ${t('schedule.allDay')}`
+                    : `${formatDayRange(window.days, t)} ${formatClock(window.from, lang)}→${formatClock(window.until, lang)}`,
                 )
                 .join(' · '),
       }),

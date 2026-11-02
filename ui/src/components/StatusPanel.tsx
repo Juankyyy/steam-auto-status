@@ -73,7 +73,9 @@ export function StatusPanel({ state }: { state: AppState | null }) {
           state: t(next.to === 'online' ? 'common.online' : 'common.invisible'),
           time: formatClockAt(next.at, lang),
         })
-      : t('common.noSchedule')
+      : state.inWindow
+        ? t('status.noNextChange')
+        : t('common.noSchedule')
 
   return (
     <Card className="relative overflow-hidden" data-status={orb}>
@@ -133,11 +135,15 @@ export function StatusPanel({ state }: { state: AppState | null }) {
               <span className="grid gap-0.5">
                 {cfg.windows.map((window, index) => (
                   <span key={index}>
-                    {t('status.scheduleSummary', {
-                      days: formatDayRange(window.days, t),
-                      from: formatClock(window.from, lang),
-                      until: formatClock(window.until, lang),
-                    })}
+                    {window.allDay
+                      ? t('status.scheduleAllDay', {
+                          days: formatDayRange(window.days, t),
+                        })
+                      : t('status.scheduleSummary', {
+                          days: formatDayRange(window.days, t),
+                          from: formatClock(window.from, lang),
+                          until: formatClock(window.until, lang),
+                        })}
                   </span>
                 ))}
               </span>

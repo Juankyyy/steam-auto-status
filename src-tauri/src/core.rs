@@ -206,6 +206,7 @@ impl Core {
         let now = Local::now();
         let now_ms = now.timestamp_millis();
         let next = schedule::next_transition(now, &inner.config);
+        let in_window = schedule::in_window_at(now, &inner.config);
         let desired = desired_persona(inner, now);
         let persona = inner.applied_persona;
         let language = inner.config.language.as_str();
@@ -224,6 +225,9 @@ impl Core {
             let shown = persona.unwrap_or(desired);
             let next_label = match next {
                 Some((at, to)) => next_label(language, to, at),
+                // No upcoming change while still inside a window means the schedule
+                // covers every day (for example, all-day every day).
+                None if in_window => ui(language, "noNextChange").to_string(),
                 None => ui(language, "noSchedule").to_string(),
             };
             tooltip.push_str(&format!(
@@ -247,7 +251,7 @@ impl Core {
             "steamStarting": inner.steam_starting,
             "persona": persona,
             "desired": desired,
-            "inWindow": schedule::in_window_at(now, &inner.config),
+            "inWindow": in_window,
             "paused": inner.config.paused,
             "forced": forced,
             "lastAppliedAt": inner.last_applied_at,
@@ -676,6 +680,7 @@ fn ui(language: &str, key: &str) -> &'static str {
             "online" => "Online",
             "invisible" => "Invisible",
             "noSchedule" => "No schedule",
+            "noNextChange" => "No upcoming change",
             "nowOnline" => "You now appear as Online on Steam",
             "nowInvisible" => "You now appear as Invisible on Steam",
             "steamNotRunning" => "Steam is not running",
@@ -689,6 +694,7 @@ fn ui(language: &str, key: &str) -> &'static str {
             "online" => "Conectado",
             "invisible" => "Invisible",
             "noSchedule" => "Sin programación",
+            "noNextChange" => "Sin próximo cambio",
             "nowOnline" => "Ahora apareces como Conectado en Steam",
             "nowInvisible" => "Ahora apareces como Invisible en Steam",
             "steamNotRunning" => "Steam no está abierto",

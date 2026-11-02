@@ -32,6 +32,8 @@ const es = {
   // ---------------------------------------------------------------- dashboard › status
   'status.scheduleLabel': 'Horario:',
   'status.scheduleSummary': '{days} · {from}–{until}',
+  'status.scheduleAllDay': '{days} · Todo el día',
+  'status.noNextChange': 'Sin próximo cambio',
   'status.nextChange': 'Próximo cambio',
   'status.nextAt': '{state} a las {time}',
   'status.in': 'en',
@@ -51,6 +53,7 @@ const es = {
 
   // ---------------------------------------------------------------- schedule summaries (lib/schedule.ts)
   'schedule.noWindow': 'sin franja',
+  'schedule.allDay': 'Todo el día',
   'schedule.hours': '{h} h',
   'schedule.hoursMinutes': '{h} h {m} min',
   'schedule.minutes': '{m} min',
@@ -82,7 +85,7 @@ const es = {
   // ---------------------------------------------------------------- settings › schedule
   'settings.schedule.title': 'Horario',
   'settings.schedule.description':
-    'Añade uno o varios horarios con sus propios días y horas. Estarás Conectado mientras cualquiera de ellos esté activo; fuera de todos, Invisible.',
+    'Añade uno o varios horarios con sus propios días y horas, o marca «Todo el día». Estarás Conectado mientras cualquiera de ellos esté activo; fuera de todos, Invisible.',
   'settings.schedule.from': 'Conectado desde',
   'settings.schedule.until': 'Hasta',
   'settings.schedule.hours': 'Horas',
@@ -97,6 +100,8 @@ const es = {
   'settings.schedule.days': 'Días',
   'settings.schedule.daysHint':
     'Marca el día en que empieza cada franja; si termina al día siguiente, sigue activa.',
+  'settings.schedule.allDayHint':
+    'Cubre desde las 00:00 hasta las 24:00 de los días marcados.',
   'settings.schedule.toggle': 'Activar automatización',
   'settings.schedule.enabledHint':
     'Cuando está desactivado, la app deja de cambiar tu estado; el actual se mantiene.',
@@ -237,6 +242,8 @@ const en: Record<keyof typeof es, string> = {
 
   'status.scheduleLabel': 'Schedule:',
   'status.scheduleSummary': '{days} · {from}–{until}',
+  'status.scheduleAllDay': '{days} · All day',
+  'status.noNextChange': 'No upcoming change',
   'status.nextChange': 'Next change',
   'status.nextAt': '{state} at {time}',
   'status.in': 'in',
@@ -255,6 +262,7 @@ const en: Record<keyof typeof es, string> = {
   'status.applyError': 'Could not change the status',
 
   'schedule.noWindow': 'no window',
+  'schedule.allDay': 'All day',
   'schedule.hours': '{h}h',
   'schedule.hoursMinutes': '{h}h {m}m',
   'schedule.minutes': '{m}m',
@@ -283,7 +291,7 @@ const en: Record<keyof typeof es, string> = {
 
   'settings.schedule.title': 'Schedule',
   'settings.schedule.description':
-    'Add one or more schedules, each with its own days and times. You are Online while any of them is active; outside all of them, Invisible.',
+    'Add one or more schedules, each with its own days and times, or mark one "All day". You are Online while any of them is active; outside all of them, Invisible.',
   'settings.schedule.from': 'Online from',
   'settings.schedule.until': 'Until',
   'settings.schedule.hours': 'Hours',
@@ -298,6 +306,7 @@ const en: Record<keyof typeof es, string> = {
   'settings.schedule.days': 'Days',
   'settings.schedule.daysHint':
     'Pick the day each window starts; a window that ends after midnight stays active.',
+  'settings.schedule.allDayHint': 'Covers 00:00–24:00 on the selected days.',
   'settings.schedule.toggle': 'Enable automation',
   'settings.schedule.enabledHint':
     'When off, the app stops changing your status; it stays as it is.',

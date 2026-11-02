@@ -2,7 +2,8 @@
 //!
 //! A configuration holds any number of independent windows. Each window is active from
 //! `from` on every selected start day until `until`; when `until <= from` it ends on the
-//! following day. The user is Online while at least one window contains the current time.
+//! following day. An `all_day` window covers the whole start day instead (00:00 → 24:00).
+//! The user is Online while at least one window contains the current time.
 
 use chrono::{
     DateTime, Datelike, Days, Duration as ChronoDuration, Local, LocalResult, NaiveDate,
@@ -59,8 +60,13 @@ fn shift_days(date: NaiveDate, offset: i64) -> NaiveDate {
     }
 }
 
-/// Length of one window in seconds; 0 when `from == until` (no window).
+/// Length of one window in seconds; 0 when `from == until` (no window). All-day windows
+/// use 24 hours as a non-zero marker; their real end is the next local midnight, which
+/// keeps them correct across DST changes.
 fn window_seconds(window: &ScheduleWindow) -> i64 {
+    if window.all_day {
+        return SECONDS_PER_DAY;
+    }
     let Some(from) = parse_hm(&window.from) else {
         return 0;
     };
@@ -72,6 +78,31 @@ fn window_seconds(window: &ScheduleWindow) -> i64 {
     (until - from + SECONDS_PER_DAY) % SECONDS_PER_DAY
 }
 
+/// Local time a window starts on a selected day: midnight for an all-day window.
+fn window_start_time(window: &ScheduleWindow) -> Option<NaiveTime> {
+    if window.all_day {
+        NaiveTime::from_hms_opt(0, 0, 0)
+    } else {
+        parse_hm(&window.from)
+    }
+}
+
+/// End of one occurrence. An all-day window ends at the next local midnight, so it still
+/// covers the whole calendar day across DST changes; timed windows use their duration.
+fn window_end(
+    window: &ScheduleWindow,
+    day: NaiveDate,
+    start: DateTime<Local>,
+    duration: i64,
+) -> Option<DateTime<Local>> {
+    if window.all_day {
+        let next_day = shift_days(day, 1);
+        local_at(next_day, NaiveTime::from_hms_opt(0, 0, 0)?)
+    } else {
+        Some(start + ChronoDuration::seconds(duration))
+    }
+}
+
 /// Whether one window contains `now`, checking both a window started today and one
 /// started yesterday that may end today.
 fn window_contains(window: &ScheduleWindow, now: DateTime<Local>) -> bool {
@@ -79,7 +110,7 @@ fn window_contains(window: &ScheduleWindow, now: DateTime<Local>) -> bool {
     if duration == 0 {
         return false;
     }
-    let Some(from) = parse_hm(&window.from) else {
+    let Some(from) = window_start_time(window) else {
         return false;
     };
 
@@ -95,7 +126,9 @@ fn window_contains(window: &ScheduleWindow, now: DateTime<Local>) -> bool {
         let Some(start) = local_at(day, from) else {
             continue;
         };
-        let end = start + ChronoDuration::seconds(duration);
+        let Some(end) = window_end(window, day, start, duration) else {
+            continue;
+        };
         if now >= start && now < end {
             return true;
         }
@@ -132,14 +165,17 @@ pub fn next_transition(now: DateTime<Local>, config: &Config) -> Option<(i64, Pe
             if !window.days.iter().any(|selected| selected == key) {
                 continue;
             }
-            let Some(from) = parse_hm(&window.from) else {
+            let Some(from) = window_start_time(window) else {
                 continue;
             };
             let Some(start) = local_at(day, from) else {
                 continue;
             };
+            let Some(end) = window_end(window, day, start, duration) else {
+                continue;
+            };
             let start_ms = start.timestamp_millis();
-            let end_ms = start_ms + duration * 1000;
+            let end_ms = end.timestamp_millis();
             if start_ms > now_ms {
                 candidates.push(start_ms);
             }
@@ -188,8 +224,18 @@ mod tests {
     fn window(days: &[&str], from: &str, until: &str) -> ScheduleWindow {
         ScheduleWindow {
             days: days.iter().map(|day| day.to_string()).collect(),
+            all_day: false,
             from: from.into(),
             until: until.into(),
+        }
+    }
+
+    fn all_day_window(days: &[&str]) -> ScheduleWindow {
+        ScheduleWindow {
+            days: days.iter().map(|day| day.to_string()).collect(),
+            all_day: true,
+            from: "00:00".into(),
+            until: "00:00".into(),
         }
     }
 
@@ -318,6 +364,68 @@ mod tests {
         assert!(in_window_at(at(2026, 10, 19, 10, 30), &config));
         assert!(in_window_at(at(2026, 10, 19, 13, 0), &config));
         assert!(!in_window_at(at(2026, 10, 19, 14, 0), &config));
+    }
+
+    #[test]
+    fn all_day_window_covers_the_whole_selected_day() {
+        let config = config_with(vec![all_day_window(&["mon"])]);
+
+        assert!(in_window_at(at(2026, 10, 19, 0, 0), &config));
+        assert!(in_window_at(at(2026, 10, 19, 12, 0), &config));
+        assert!(in_window_at(at(2026, 10, 19, 23, 59), &config));
+        assert!(!in_window_at(at(2026, 10, 20, 0, 0), &config));
+        assert_eq!(
+            next_transition(at(2026, 10, 19, 12, 0), &config).unwrap(),
+            (
+                at(2026, 10, 20, 0, 0).timestamp_millis(),
+                Persona::Invisible
+            )
+        );
+    }
+
+    #[test]
+    fn all_day_ignores_the_stored_times() {
+        let mut window = all_day_window(&["mon"]);
+        window.from = "17:00".into();
+        window.until = "01:15".into();
+        let config = config_with(vec![window]);
+
+        // The times stay in the config for later, but the whole day is Online.
+        assert!(in_window_at(at(2026, 10, 19, 5, 0), &config));
+        assert_eq!(
+            next_transition(at(2026, 10, 19, 12, 0), &config).unwrap(),
+            (
+                at(2026, 10, 20, 0, 0).timestamp_millis(),
+                Persona::Invisible
+            )
+        );
+    }
+
+    #[test]
+    fn consecutive_all_day_windows_are_continuous() {
+        let config = config_with(vec![all_day_window(&["mon", "tue"])]);
+
+        assert!(in_window_at(at(2026, 10, 19, 0, 0), &config));
+        assert!(in_window_at(at(2026, 10, 20, 23, 59), &config));
+        assert!(!in_window_at(at(2026, 10, 21, 0, 0), &config));
+        assert_eq!(
+            next_transition(at(2026, 10, 19, 12, 0), &config).unwrap(),
+            (
+                at(2026, 10, 21, 0, 0).timestamp_millis(),
+                Persona::Invisible
+            )
+        );
+    }
+
+    #[test]
+    fn all_day_every_day_is_always_online() {
+        let config = config_with(vec![all_day_window(&[
+            "mon", "tue", "wed", "thu", "fri", "sat", "sun",
+        ])]);
+
+        assert!(in_window_at(at(2026, 10, 19, 3, 0), &config));
+        assert!(in_window_at(at(2026, 10, 25, 23, 59), &config));
+        assert!(next_transition(at(2026, 10, 19, 12, 0), &config).is_none());
     }
 
     #[test]

@@ -14,10 +14,15 @@ pub const DAYS: [&str; 7] = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
 
 /// One recurring Online window: a set of start days plus the local start/end times.
 /// When `until <= from` the window ends on the next day, so a single window can cross
-/// midnight (Friday 17:00 → Saturday 01:15, for example).
+/// midnight (Friday 17:00 → Saturday 01:15, for example). With `all_day` the window
+/// ignores both times and covers the whole selected day (00:00 → 24:00); the saved times
+/// are kept so turning the option off restores them.
 #[derive(Clone, Debug, Serialize, Deserialize, PartialEq)]
+#[serde(rename_all = "camelCase")]
 pub struct ScheduleWindow {
     pub days: Vec<String>,
+    #[serde(default)]
+    pub all_day: bool,
     pub from: String,
     pub until: String,
 }
@@ -26,6 +31,7 @@ impl ScheduleWindow {
     fn new(days: &[&str], from: &str, until: &str) -> Self {
         Self {
             days: days.iter().map(|day| day.to_string()).collect(),
+            all_day: false,
             from: from.to_string(),
             until: until.to_string(),
         }
@@ -195,6 +201,7 @@ fn parse_windows(value: &Value, defaults: &[ScheduleWindow]) -> Vec<ScheduleWind
             let object = item.as_object()?;
             Some(ScheduleWindow {
                 days: days_from_overlay(object.get("days"), &fallback.days),
+                all_day: object.get("allDay").map(truthy).unwrap_or(false),
                 from: object
                     .get("from")
                     .and_then(normalize_time)
@@ -218,6 +225,7 @@ fn legacy_window(base: &Config, overlay: &Value, fallback: &ScheduleWindow) -> S
             Some(value) => days_from_overlay(Some(value), fallback_days),
             None => fallback_days.to_vec(),
         },
+        all_day: false,
         from: legacy_time(base_window, overlay, "onlineFrom", &fallback.from),
         until: legacy_time(base_window, overlay, "onlineUntil", &fallback.until),
     }
@@ -434,6 +442,7 @@ mod tests {
         let raw = std::fs::read_to_string(dir.join("config.json")).unwrap();
         let parsed: Value = serde_json::from_str(&raw).unwrap();
         assert!(parsed.get("windows").is_some());
+        assert_eq!(parsed["windows"][0]["allDay"], json!(false));
         assert!(parsed.get("days").is_none());
         assert!(parsed.get("onlineFrom").is_none());
         let _ = std::fs::remove_dir_all(&dir);
@@ -464,6 +473,41 @@ mod tests {
             merged.windows[1],
             ScheduleWindow::new(&["sat", "sun"], "10:00", "23:00")
         );
+        assert!(!merged.windows[0].all_day);
+        assert!(!merged.windows[1].all_day);
+    }
+
+    #[test]
+    fn merge_accepts_all_day_windows() {
+        let base = Config::default();
+        let merged = merge(
+            &base,
+            &json!({
+                "windows": [
+                    {
+                        "days": ["sat", "sun"],
+                        "allDay": true,
+                        "from": "17:00",
+                        "until": "01:15"
+                    }
+                ]
+            }),
+        );
+        assert_eq!(merged.windows.len(), 1);
+        assert!(merged.windows[0].all_day);
+        // The times stay in the config so turning the option off restores them.
+        assert_eq!(merged.windows[0].from, "17:00");
+        assert_eq!(merged.windows[0].until, "01:15");
+        let truthy = merge(
+            &base,
+            &json!({ "windows": [{ "days": ["sat"], "allDay": 1 }] }),
+        );
+        assert!(truthy.windows[0].all_day);
+        let falsy = merge(
+            &base,
+            &json!({ "windows": [{ "days": ["sat"], "allDay": "" }] }),
+        );
+        assert!(!falsy.windows[0].all_day);
     }
 
     #[test]

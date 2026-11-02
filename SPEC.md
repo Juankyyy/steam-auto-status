@@ -16,6 +16,9 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 - **Varios horarios independientes:** cada horario tiene sus propios días y horas. Por
   ejemplo, L–V 17:30 → 01:00 y S–D 10:00 → 23:00. Se está **Conectado mientras cualquier
   horario esté activo**; fuera de todos, Invisible.
+- **Todo el día:** cada horario puede cubrir el día completo (00:00 → 24:00) de sus días
+  marcados sin fijar horas. Todos los días en modo «Todo el día» equivale a estar siempre
+  Conectado.
 - **Personalizable desde la GUI:** horarios, días de la semana, pausar/activar la
   automatización, arranque con Windows, notificaciones, forzar estados y carpeta de datos.
   (Si se quiere cortar el viernes a medianoche, basta poner fin = 00:00 en ese horario.)
@@ -50,7 +53,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 | Datos | **`Documents\steam-auto-status\`** (ruta resuelta con la API de carpetas conocidas de Windows; configurable en ajustes) |
 | Distribución | `tauri build` → **instalador NSIS `.exe`** (~2,5 MB; ~12 MB instalado), sin firma de código |
 | Arranque con Windows | Login item con `--hidden` (arranca solo en bandeja) |
-| Horario | Varios bloques independientes (días de inicio + hora inicio/fin); por defecto L–V 17:30 → 01:00 |
+| Horario | Varios bloques independientes (días de inicio + hora inicio/fin o «Todo el día»); por defecto L–V 17:30 → 01:00 |
 | Zona horaria | Hora local de la máquina |
 | Idioma de la UI | **Español/English** (`language` en `config.json`); primer arranque: idioma de Windows (es → Español, resto → English). Bandeja, tooltip y notificaciones siguen el mismo ajuste |
 | Presencia | El cliente oficial debe estar **abierto y con sesión iniciada**; la app le pide `Online`/`Invisible`. Nunca usa `Offline` |
@@ -131,6 +134,12 @@ siguiente. Duración = `(fin - inicio) mod 24h` (por defecto: 7,5 h). Cálculo d
 ventana ahora?": comprobar si `ahora` cae en alguna ventana iniciada **hoy** o en alguna
 iniciada **ayer** (ayer solo importa si su hora fin salta a hoy). Se está Conectado si al
 menos una ventana está activa; Invisible si ninguna lo está.
+
+Una ventana con `allDay` ignora las horas guardadas y cubre el día completo:
+`00:00 → 24:00` del día de inicio. Las horas se conservan en la configuración para
+restaurarlas al desactivar la opción. Varios días consecutivos en modo «Todo el día» son una
+cobertura continua; si están los siete días, no hay próximo cambio y la UI muestra «Sin
+próximo cambio» en lugar de «Sin programación».
 
 El **próximo cambio** es el próximo cambio real de presencia, no solo el próximo extremo
 horario: si una ventana termina justo cuando otra empieza, el estado no cambia y no se
@@ -232,15 +241,17 @@ muestra las secciones y solo se muestra una a la vez (**Horario** por defecto); 
 estrechos (por debajo del mínimo de la ventana) la barra pasa a una fila horizontal. La
 sección activa es estado local de la UI: no añade rutas ni cambia el contrato IPC.
 
-- **Horario**: lista de horarios independientes. Cada tarjeta tiene sus días, horas
-  inicio/fin con campos segmentados (24 h, o 12 h con AM/PM en inglés), una franja visual de
-  24 h con extremos arrastrables en pasos de 5 min (los campos permiten ajuste al minuto) y
-  un botón para quitarla. El título muestra el rango de días («Lun–Vie», «Sáb–Dom»).
-  «Añadir horario» crea un bloque con los días que no usa ningún otro (con L–V existente,
-  S–D) y copia las horas del último; si no queda ninguno, aparece un estado vacío con el
-  botón de añadir. El interruptor de la cabecera activa o desactiva **toda** la
-  automatización (equivale a pausar o reanudar); mientras está desactivado, los controles
-  quedan bloqueados y atenuados.
+- **Horario**: lista de horarios independientes. Cada tarjeta tiene sus días, un
+  interruptor **«Todo el día»**, horas inicio/fin con campos segmentados (24 h, o 12 h con
+  AM/PM en inglés), una franja visual de 24 h con extremos arrastrables en pasos de 5 min
+  (los campos permiten ajuste al minuto) y un botón para quitarla. Con «Todo el día» activo
+  se ocultan las horas y la franja, y el bloque cubre `00:00 → 24:00` de sus días. El título
+  muestra el rango de días («Lun–Vie», «Sáb–Dom»). «Añadir horario» crea un bloque con los
+  días que no usa ningún otro (con L–V existente, S–D) y copia las horas y el modo del
+  último; si no queda ninguno, aparece un estado vacío con el botón de añadir. El
+  interruptor de la cabecera activa o desactiva **toda** la automatización (equivale a
+  pausar o reanudar); mientras está desactivado, los controles quedan bloqueados y
+  atenuados.
 - **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
   estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
   antigua (`auth.json`, `profile.json`, `steam-data/`), un bloque de limpieza con
@@ -336,6 +347,7 @@ Ejemplo de `config.json`:
   "windows": [
     {
       "days": ["mon", "tue", "wed", "thu", "fri"],
+      "allDay": false,
       "from": "17:30",
       "until": "01:00"
     }
@@ -351,10 +363,12 @@ Ejemplo de `config.json`:
 ```
 
 `windows` es la lista de horarios. Cada entrada tiene `days` (días en que **empieza** la
-franja), `from` y `until` en `HH:MM`; si `until <= from`, la franja termina al día
-siguiente. Una lista vacía equivale a no tener programación: siempre Invisible. Las
-configuraciones antiguas con `days`/`onlineFrom`/`onlineUntil` se migran al arrancar a un
-único bloque y se reescriben con la forma nueva.
+franja), `allDay`, `from` y `until` en `HH:MM`; si `until <= from`, la franja termina al día
+siguiente. Con `allDay: true` se ignoran `from`/`until` y la franja cubre `00:00 → 24:00`
+del día de inicio; las horas se conservan para cuando se desactive. Una lista vacía equivale
+a no tener programación: siempre Invisible. Las configuraciones antiguas con
+`days`/`onlineFrom`/`onlineUntil` se migran al arrancar a un único bloque; los bloques sin
+`allDay` reciben `false` y todo se reescribe con la forma nueva.
 
 `machineName` ya no existe: la app no reporta una máquina propia; usa la sesión normal del
 cliente de Steam.
@@ -511,8 +525,11 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
     arrastrar los extremos de la franja en pasos de 5 min y probar una franja que cruce
     medianoche. Añadir un segundo horario (con L–V existente debe proponer S–D), cambiar sus
     horas y comprobar que el panel muestra ambos y que las transiciones respetan la unión;
-    borrar un horario y comprobar que el primero sigue funcionando. En Ajustes › Apariencia,
-    cambiar la precisión de la cuenta atrás y comprobar que el panel la aplica al momento.
+    borrar un horario y comprobar que el primero sigue funcionando. Activar «Todo el día» en
+    un bloque y comprobar que cubre el día completo, que al desactivarlo vuelven las horas
+    anteriores y que con todos los días en «Todo el día» el panel muestra «Sin próximo
+    cambio». En Ajustes › Apariencia, cambiar la precisión de la cuenta atrás y comprobar que
+    el panel la aplica al momento.
 12. En Ajustes › Apariencia, probar el fondo de la aplicación en Panel, Ajustes y
     Desarrollador: **Completo** (los puntos siguen al puntero en toda la ventana, no se quedan
     en el centro al salir y desaparecen al abandonar la ventana), **Estático** (solo rejilla)
