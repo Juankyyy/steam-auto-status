@@ -9,6 +9,7 @@ import { StatusOrb } from '@/components/StatusOrb'
 import { useAppSuspended } from '@/lib/app-suspended'
 import { formatClock, formatClockAt, type Translate } from '@/lib/i18n'
 import { useI18n } from '@/lib/i18n-context'
+import { formatDayRange } from '@/lib/schedule'
 import { steamStatus } from '@/lib/status'
 import { cmd, openSteam, type AppState } from '@/lib/tauri'
 
@@ -121,16 +122,28 @@ export function StatusPanel({ state }: { state: AppState | null }) {
               })}
             </Badge>
           )}
-          {next && cfg && (
-            <span className="text-xs text-muted-foreground">
-              {t(cfg.days.length === 1 ? 'status.scheduleSummary.one' : 'status.scheduleSummary.many', {
-                count: cfg.days.length,
-                from: formatClock(cfg.onlineFrom, lang),
-                until: formatClock(cfg.onlineUntil, lang),
-              })}
-            </span>
-          )}
         </div>
+
+        {cfg && (
+          <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1 border-t border-border/60 pt-3 text-xs text-muted-foreground">
+            <span className="font-medium">{t('status.scheduleLabel')}</span>
+            {cfg.windows.length === 0 ? (
+              <span>{t('common.noSchedule')}</span>
+            ) : (
+              <span className="grid gap-0.5">
+                {cfg.windows.map((window, index) => (
+                  <span key={index}>
+                    {t('status.scheduleSummary', {
+                      days: formatDayRange(window.days, t),
+                      from: formatClock(window.from, lang),
+                      until: formatClock(window.until, lang),
+                    })}
+                  </span>
+                ))}
+              </span>
+            )}
+          </div>
+        )}
 
         <div ref={alertsRef} className="grid gap-3 empty:hidden">
           {state && !state.steamRunning && (

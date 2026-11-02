@@ -1,5 +1,6 @@
 import { getVersion } from '@tauri-apps/api/app'
 import { formatClock, formatClockAt, type Translate } from '@/lib/i18n'
+import { formatDayRange } from '@/lib/schedule'
 import { isTauri, type AppState, type Language } from '@/lib/tauri'
 
 /** Text copied by Settings › Data › "Copy diagnostics" (version, state snapshot, recent log). */
@@ -38,9 +39,15 @@ export async function buildDiagnostics(
           : t('diag.none'),
       }),
       t('diag.schedule', {
-        days: state.config.days.join(', '),
-        from: formatClock(state.config.onlineFrom, lang),
-        until: formatClock(state.config.onlineUntil, lang),
+        value:
+          state.config.windows.length === 0
+            ? t('common.noSchedule')
+            : state.config.windows
+                .map(
+                  (window) =>
+                    `${formatDayRange(window.days, t)} ${formatClock(window.from, lang)}→${formatClock(window.until, lang)}`,
+                )
+                .join(' · '),
       }),
       t('diag.lastError', { value: state.lastApplyError ?? t('diag.none') }),
     )

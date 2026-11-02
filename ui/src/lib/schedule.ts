@@ -68,3 +68,33 @@ export function formatWindowLength(from: string, until: string, t: Translate): s
   if (h === 0) return t('schedule.minutes', { m })
   return m === 0 ? t('schedule.hours', { h }) : t('schedule.hoursMinutes', { h, m })
 }
+
+/**
+ * Compact day summary for cards and the dashboard: consecutive selected days become a
+ * range ("Lun–Vie", "Sáb–Dom") and the rest stay as a comma-separated list.
+ */
+export function formatDayRange(days: Day[], t: Translate): string {
+  const selected = DAY_ORDER.filter((day) => days.includes(day))
+  if (selected.length === 0) return t('schedule.noDays')
+
+  const groups: Day[][] = []
+  for (const day of selected) {
+    const lastGroup = groups[groups.length - 1]
+    const lastDay = lastGroup?.[lastGroup.length - 1]
+    if (lastDay && DAY_ORDER.indexOf(day) === DAY_ORDER.indexOf(lastDay) + 1) {
+      lastGroup.push(day)
+    } else {
+      groups.push([day])
+    }
+  }
+
+  return groups
+    .map((group) => {
+      const first = group[0]
+      const last = group[group.length - 1]
+      if (!first || !last) return ''
+      if (group.length === 1) return t(`day.${first}`)
+      return t('schedule.dayRange', { from: t(`day.${first}`), to: t(`day.${last}`) })
+    })
+    .join(t('schedule.daySeparator'))
+}

@@ -30,9 +30,9 @@ status. No second session, no credentials, and nothing to remember before work o
 
 ## ✨ Features
 
-- **Schedule-driven presence**: Online inside your weekly window and Invisible outside it.
-  Pick the days and the start/end time on a draggable 24-hour strip, including overnight
-  windows (default: Monday–Friday, 17:30 → 01:00).
+- **Schedule-driven presence**: Online inside any of your weekly schedules and Invisible
+  outside all of them. Give weekdays and weekends different days and hours on a draggable
+  24-hour strip, including overnight windows (default: Monday–Friday, 17:30 → 01:00).
 - **No login, no session**: The app doesn't sign in, store a token or create a second Steam
   session. It asks the official client that is already open to change its own status, using
   the same local commands as the Friends → Status menu; it doesn't even know which account is
@@ -89,7 +89,8 @@ schedule as soon as the client is signed in.
 ### 3. Forget about it
 
 The app lives in the tray and switches your presence on schedule. Open the panel any time
-to adjust the days and hours, enable or disable the schedule, or change notifications.
+to adjust each schedule's days and hours, enable or disable the schedule, or change
+notifications.
 
 ## ⚙️ How it works
 
@@ -100,8 +101,9 @@ commands. The app sends the same command the Friends → Status menu uses:
 - `steam://friends/status/invisible`
 
 There is no separate session, no refresh token and no password. The app checks that
-`steam.exe` is running, sends the command, and records what it sent. Outside your window it
-asks for Invisible (not Offline: Offline would sign you out of friends and chat). If Steam
+`steam.exe` is running, sends the command, and records what it sent. Outside all your
+schedules it asks for Invisible (not Offline: Offline would sign you out of friends and
+chat). If Steam
 is closed, your status is already Offline; the app waits for the client and applies the
 schedule when it appears, retrying for up to two minutes while Steam finishes signing in.
 
@@ -132,7 +134,7 @@ Check four things:
    "Steam closed", open Steam and wait a few seconds; the app applies the schedule when it
    appears.
 2. **The app is running**: look for the tray icon.
-3. **The schedule covers the current time**: panel → Schedule (overnight windows included).
+3. **A schedule covers the current time**: panel → Schedule (overnight windows included).
 4. **Force a resend**: if the panel says "Could not change the status", or you changed your
    status by hand, press **Reapply now** (in the panel alert or **Settings › Steam client**).
 

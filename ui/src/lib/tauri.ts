@@ -10,10 +10,15 @@ export type CountdownPrecision = 'hours' | 'minutes' | 'seconds'
 /** Dot-grid backdrop of the app shell. */
 export type AppBackground = 'full' | 'static' | 'none'
 
-export interface Config {
+/** One recurring Online window; `days` are the days on which it starts. */
+export interface ScheduleWindow {
   days: Day[]
-  onlineFrom: string
-  onlineUntil: string
+  from: string
+  until: string
+}
+
+export interface Config {
+  windows: ScheduleWindow[]
   paused: boolean
   startWithWindows: boolean
   notifications: boolean

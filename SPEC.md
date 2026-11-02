@@ -7,16 +7,18 @@
 ## 1. Objetivo
 
 Aplicación de escritorio para Windows que cambia automáticamente la presencia de Steam del
-usuario entre **Invisible** y **Conectado** según un horario configurable, sin intervención
+usuario entre **Invisible** y **Conectado** según horarios configurables, sin intervención
 manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para estar abierta
 24/7), interfaz moderna e integración con la bandeja del sistema.
 
-- **Franja Conectado (por defecto):** lunes a viernes, **17:30 → 01:00** (cruza medianoche;
-  la del viernes termina el sábado a la 01:00 — confirmado).
-- **Fuera de esa franja:** Invisible. Sábado (desde 01:00) y domingo: Invisible.
-- **Personalizable desde la GUI:** horario, días de la semana, pausar/activar la
+- **Horario por defecto:** lunes a viernes, **17:30 → 01:00** (cruza medianoche; la del
+  viernes termina el sábado a la 01:00 — confirmado).
+- **Varios horarios independientes:** cada horario tiene sus propios días y horas. Por
+  ejemplo, L–V 17:30 → 01:00 y S–D 10:00 → 23:00. Se está **Conectado mientras cualquier
+  horario esté activo**; fuera de todos, Invisible.
+- **Personalizable desde la GUI:** horarios, días de la semana, pausar/activar la
   automatización, arranque con Windows, notificaciones, forzar estados y carpeta de datos.
-  (Si se quiere cortar el viernes a medianoche, basta poner fin = 00:00 en ajustes.)
+  (Si se quiere cortar el viernes a medianoche, basta poner fin = 00:00 en ese horario.)
 
 ## 2. Por qué es posible (fundamento técnico)
 
@@ -29,7 +31,8 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 3. **La app no crea una sesión:** envía al cliente local el mismo cambio que haría el usuario
    con el menú. No hay login, token, QR ni segunda sesión; la app ni siquiera conoce la
    cuenta.
-4. **Consecuencia práctica:** dentro de la ventana la app pide `Online`; fuera, `Invisible`.
+4. **Consecuencia práctica:** dentro de alguna ventana la app pide `Online`; fuera de todas,
+   `Invisible`.
    Si Steam está cerrado, la cuenta ya está Offline y la app no puede hacer nada hasta que el
    cliente vuelva a abrirse y a iniciar sesión.
 5. **Riesgo:** al no abrir sesiones adicionales se elimina el patrón de logons/reconexiones
@@ -47,7 +50,7 @@ manual. Prioridad de diseño: **mínimo consumo de recursos** (pensada para esta
 | Datos | **`Documents\steam-auto-status\`** (ruta resuelta con la API de carpetas conocidas de Windows; configurable en ajustes) |
 | Distribución | `tauri build` → **instalador NSIS `.exe`** (~2,5 MB; ~12 MB instalado), sin firma de código |
 | Arranque con Windows | Login item con `--hidden` (arranca solo en bandeja) |
-| Horario por defecto | L–V 17:30 → 01:00 |
+| Horario | Varios bloques independientes (días de inicio + hora inicio/fin); por defecto L–V 17:30 → 01:00 |
 | Zona horaria | Hora local de la máquina |
 | Idioma de la UI | **Español/English** (`language` en `config.json`); primer arranque: idioma de Windows (es → Español, resto → English). Bandeja, tooltip y notificaciones siguen el mismo ajuste |
 | Presencia | El cliente oficial debe estar **abierto y con sesión iniciada**; la app le pide `Online`/`Invisible`. Nunca usa `Offline` |
@@ -85,8 +88,9 @@ app, en módulos Rust: `core.rs` (estado, temporizadores y comandos), `config.rs
 stdin/stdout.
 
 1. Carga `config.json` de la carpeta de datos y lo mantiene en memoria.
-2. Cada **30 s**: calcula el estado deseado (`Online` dentro de ventana, `Invisible` fuera;
-   un `forceState` activo manda). Si difiere del último aplicado, lo envía al cliente.
+2. Cada **30 s**: calcula el estado deseado (`Online` dentro de alguna ventana, `Invisible`
+   fuera de todas; un `forceState` activo manda). Si difiere del último aplicado, lo envía
+   al cliente.
 3. **Control del cliente local** (`steam.rs`):
    - `is_running()` recorre la lista de procesos con **Toolhelp**
      (`CreateToolhelp32Snapshot`) y busca `steam.exe`, sin lanzar `tasklist`.
@@ -120,15 +124,24 @@ permite reintentar. La app tampoco lee la presencia real: si el usuario cambia e
 mano, no se corrige hasta la próxima transición, el siguiente arranque de la app o de Steam,
 o «Reaplicar»; no hay reaplicación periódica para no pelearse con un cambio manual.
 
-**Semántica de la ventana horaria (cruza medianoche):** una ventana se define por
-`(día de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
+**Semántica de los horarios (ventanas que cruzan medianoche):** la configuración guarda
+una lista de ventanas independientes; cada una se define por
+`(días de inicio, hora inicio, hora fin)`. Si `hora fin <= hora inicio`, termina el día
 siguiente. Duración = `(fin - inicio) mod 24h` (por defecto: 7,5 h). Cálculo de "¿estoy en
-ventana ahora?": comprobar si `ahora` cae en la ventana iniciada **hoy** o en la iniciada
-**ayer** (ayer solo importa si su hora fin salta a hoy).
+ventana ahora?": comprobar si `ahora` cae en alguna ventana iniciada **hoy** o en alguna
+iniciada **ayer** (ayer solo importa si su hora fin salta a hoy). Se está Conectado si al
+menos una ventana está activa; Invisible si ninguna lo está.
 
-Ventanas resultantes por defecto (`days: [lun..vie]`):
+El **próximo cambio** es el próximo cambio real de presencia, no solo el próximo extremo
+horario: si una ventana termina justo cuando otra empieza, el estado no cambia y no se
+anuncia una transición falsa.
+
+Ventana resultante por defecto (`windows: [{ days: [lun..vie], from: 17:30, until: 01:00 }]`):
 
 - Lun 17:30 → Mar 01:00 · Mar → Mié · Mié → Jue · Jue → Vie · Vie 17:30 → Sáb 01:00
+
+Añadir un segundo bloque (por ejemplo `days: [sáb, dom], from: 10:00, until: 23:00`)
+mantiene la ventana de lunes a viernes y añade el fin de semana sin tocar el primer bloque.
 
 **Contrato UI ↔ núcleo:** se conservan los nombres del sidecar para no tocar la UI.
 
@@ -203,13 +216,13 @@ dibuja mientras el puntero se mueve; el bucle se apaga al asentarse. Con
 sigue siendo la fuente de verdad accesible. NumberFlow y AutoAnimate respetan también esa
 preferencia por su cuenta.
 
-**Panel de control** (`/`): estado del cliente y resumen del horario:
+**Panel de control** (`/`): estado del cliente y resumen de los horarios:
 
 1. **Estado**: "Conectado" / "Invisible" / "Steam cerrado" / "Esperando a Steam" + cuenta
    atrás a la próxima transición ("Online en 2 h 14 min 30 s" / "Invisible a la 01:00"),
    con el detalle configurable en Ajustes › Apariencia, el último cambio aplicado
-   ("Último cambio: Invisible a la 01:00"), el resumen del horario y los badges de
-   franja/pausa.
+   ("Último cambio: Invisible a la 01:00"), el resumen de todos los horarios (una línea por
+   bloque) y los badges de franja/pausa.
 2. **Steam cerrado**: aviso con botón **Abrir Steam** cuando el proceso no está en marcha;
    mientras Steam inicia, un aviso informativo. Si el último comando falló, un aviso con
    botón **Reaplicar ahora**.
@@ -219,11 +232,15 @@ muestra las secciones y solo se muestra una a la vez (**Horario** por defecto); 
 estrechos (por debajo del mínimo de la ventana) la barra pasa a una fila horizontal. La
 sección activa es estado local de la UI: no añade rutas ni cambia el contrato IPC.
 
-- **Horario**: horas inicio/fin con campos segmentados (24 h, o 12 h con AM/PM en inglés),
-  una franja visual de 24 h con extremos arrastrables en pasos de 5 min (los campos permiten
-  ajuste al minuto) y días de la semana. El interruptor de la cabecera activa o desactiva el
-  horario (equivale a pausar o reanudar la automatización); mientras está desactivado, los
-  controles quedan bloqueados y atenuados.
+- **Horario**: lista de horarios independientes. Cada tarjeta tiene sus días, horas
+  inicio/fin con campos segmentados (24 h, o 12 h con AM/PM en inglés), una franja visual de
+  24 h con extremos arrastrables en pasos de 5 min (los campos permiten ajuste al minuto) y
+  un botón para quitarla. El título muestra el rango de días («Lun–Vie», «Sáb–Dom»).
+  «Añadir horario» crea un bloque con los días que no usa ningún otro (con L–V existente,
+  S–D) y copia las horas del último; si no queda ninguno, aparece un estado vacío con el
+  botón de añadir. El interruptor de la cabecera activa o desactiva **toda** la
+  automatización (equivale a pausar o reanudar); mientras está desactivado, los controles
+  quedan bloqueados y atenuados.
 - **Cliente de Steam**: estado del cliente, botones Abrir Steam y Reaplicar ahora, último
   estado aplicado, explicación de que la app no inicia sesión y, si hay restos de la versión
   antigua (`auth.json`, `profile.json`, `steam-data/`), un bloque de limpieza con
@@ -241,8 +258,8 @@ sección activa es estado local de la UI: no añade rutas ni cambia el contrato 
 - **Acerca de**: versión y enlaces al repositorio, última release e issues.
 
 Los controles de configuración que antes vivían en el panel se han movido aquí; el panel
-conserva el resumen del horario dentro de la tarjeta de estado y el interruptor para
-activarlo o desactivarlo vive en Ajustes › Horario.
+conserva el resumen de los horarios dentro de la tarjeta de estado y el interruptor para
+activar o desactivar toda la automatización vive en Ajustes › Horario.
 
 **Idioma (es/en):** los textos de la interfaz viven en un diccionario tipado
 (`ui/src/lib/i18n.ts`): `es` es la fuente de los tipos y `en` debe completar exactamente las
@@ -316,9 +333,13 @@ Ejemplo de `config.json`:
 
 ```json
 {
-  "days": ["mon", "tue", "wed", "thu", "fri"],
-  "onlineFrom": "17:30",
-  "onlineUntil": "01:00",
+  "windows": [
+    {
+      "days": ["mon", "tue", "wed", "thu", "fri"],
+      "from": "17:30",
+      "until": "01:00"
+    }
+  ],
   "paused": false,
   "startWithWindows": false,
   "notifications": false,
@@ -328,6 +349,12 @@ Ejemplo de `config.json`:
   "appBackground": "full"
 }
 ```
+
+`windows` es la lista de horarios. Cada entrada tiene `days` (días en que **empieza** la
+franja), `from` y `until` en `HH:MM`; si `until <= from`, la franja termina al día
+siguiente. Una lista vacía equivale a no tener programación: siempre Invisible. Las
+configuraciones antiguas con `days`/`onlineFrom`/`onlineUntil` se migran al arrancar a un
+único bloque y se reescriben con la forma nueva.
 
 `machineName` ya no existe: la app no reporta una máquina propia; usa la sesión normal del
 cliente de Steam.
@@ -482,8 +509,10 @@ con Invisible. Paleta: `#132337` (fondo), `#64C4FD`, `#4DD4A0`, `#6C819E`.
 11. En Ajustes › Horario, apagar y encender el interruptor (los controles se bloquean),
     editar las horas con los campos segmentados (24 h en español, 12 h AM/PM en inglés),
     arrastrar los extremos de la franja en pasos de 5 min y probar una franja que cruce
-    medianoche. En Ajustes › Apariencia, cambiar la precisión de la cuenta atrás y comprobar
-    que el panel la aplica al momento.
+    medianoche. Añadir un segundo horario (con L–V existente debe proponer S–D), cambiar sus
+    horas y comprobar que el panel muestra ambos y que las transiciones respetan la unión;
+    borrar un horario y comprobar que el primero sigue funcionando. En Ajustes › Apariencia,
+    cambiar la precisión de la cuenta atrás y comprobar que el panel la aplica al momento.
 12. En Ajustes › Apariencia, probar el fondo de la aplicación en Panel, Ajustes y
     Desarrollador: **Completo** (los puntos siguen al puntero en toda la ventana, no se quedan
     en el centro al salir y desaparecen al abandonar la ventana), **Estático** (solo rejilla)

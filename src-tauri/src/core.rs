@@ -1,9 +1,10 @@
 //! Rust core: schedule, configuration, logs, local Steam client control and the
 //! `sidecar-message` events the panel already listens to.
 //!
-//! This is a direct port of the old Node sidecar (`sidecar/src/index.ts`): same commands,
-//! same event shapes, same state fields, same behavior. The name of the event channel is
-//! kept for compatibility with the UI; there is no sidecar process anymore.
+//! This started as a direct port of the old Node sidecar (`sidecar/src/index.ts`): same
+//! commands, event shapes and state fields. The schedule now holds several independent
+//! windows. The name of the event channel is kept for compatibility with the UI; there is
+//! no sidecar process anymore.
 
 use std::path::PathBuf;
 use std::sync::atomic::{AtomicBool, Ordering};
@@ -499,10 +500,7 @@ impl Core {
         let mut inner = self.lock();
         let was_paused = inner.config.paused;
         let next = config::merge(&inner.config, &params);
-        let schedule_changed = next.online_from != inner.config.online_from
-            || next.online_until != inner.config.online_until
-            || next.days != inner.config.days
-            || next.paused != was_paused;
+        let schedule_changed = next.windows != inner.config.windows || next.paused != was_paused;
         let pausing = next.paused && !was_paused;
         let resuming = !next.paused && was_paused;
         inner.config = next;

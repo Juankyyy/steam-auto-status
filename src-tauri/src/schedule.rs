@@ -1,12 +1,15 @@
-//! Online-window calculations in local time. Ported from the old Node sidecar, including
-//! the "online window may cross midnight" handling.
+//! Online-window calculations in local time, including windows that cross midnight.
+//!
+//! A configuration holds any number of independent windows. Each window is active from
+//! `from` on every selected start day until `until`; when `until <= from` it ends on the
+//! following day. The user is Online while at least one window contains the current time.
 
 use chrono::{
     DateTime, Datelike, Days, Duration as ChronoDuration, Local, LocalResult, NaiveDate,
     NaiveDateTime, NaiveTime, TimeZone, Timelike,
 };
 
-use crate::config::Config;
+use crate::config::{Config, ScheduleWindow};
 use crate::steam::Persona;
 
 const SECONDS_PER_DAY: i64 = 86_400;
@@ -40,6 +43,14 @@ fn local_at(date: NaiveDate, time: NaiveTime) -> Option<DateTime<Local>> {
     }
 }
 
+fn local_from_ms(timestamp_ms: i64) -> Option<DateTime<Local>> {
+    match Local.timestamp_millis_opt(timestamp_ms) {
+        LocalResult::Single(datetime) => Some(datetime),
+        LocalResult::Ambiguous(first, _) => Some(first),
+        LocalResult::None => None,
+    }
+}
+
 fn shift_days(date: NaiveDate, offset: i64) -> NaiveDate {
     if offset >= 0 {
         date + Days::new(offset as u64)
@@ -48,12 +59,12 @@ fn shift_days(date: NaiveDate, offset: i64) -> NaiveDate {
     }
 }
 
-/// Length of the Online window in seconds; 0 when `from == until` (no window).
-fn window_seconds(config: &Config) -> i64 {
-    let Some(from) = parse_hm(&config.online_from) else {
+/// Length of one window in seconds; 0 when `from == until` (no window).
+fn window_seconds(window: &ScheduleWindow) -> i64 {
+    let Some(from) = parse_hm(&window.from) else {
         return 0;
     };
-    let Some(until) = parse_hm(&config.online_until) else {
+    let Some(until) = parse_hm(&window.until) else {
         return 0;
     };
     let from = from.num_seconds_from_midnight() as i64;
@@ -61,20 +72,24 @@ fn window_seconds(config: &Config) -> i64 {
     (until - from + SECONDS_PER_DAY) % SECONDS_PER_DAY
 }
 
-/// Are we inside an Online window? (checks today's and yesterday's)
-pub fn in_window_at(now: DateTime<Local>, config: &Config) -> bool {
-    let duration = window_seconds(config);
+/// Whether one window contains `now`, checking both a window started today and one
+/// started yesterday that may end today.
+fn window_contains(window: &ScheduleWindow, now: DateTime<Local>) -> bool {
+    let duration = window_seconds(window);
     if duration == 0 {
         return false;
     }
-    let Some(from) = parse_hm(&config.online_from) else {
+    let Some(from) = parse_hm(&window.from) else {
         return false;
     };
 
     for offset in 0..=1i64 {
         let day = shift_days(now.date_naive(), -offset);
-        let key = weekday_key(day);
-        if !config.days.iter().any(|selected| selected == key) {
+        if !window
+            .days
+            .iter()
+            .any(|selected| selected == weekday_key(day))
+        {
             continue;
         }
         let Some(start) = local_at(day, from) else {
@@ -88,49 +103,79 @@ pub fn in_window_at(now: DateTime<Local>, config: &Config) -> bool {
     false
 }
 
-/// Next scheduled change, as `(unix milliseconds, target presence)`.
-pub fn next_transition(now: DateTime<Local>, config: &Config) -> Option<(i64, Persona)> {
-    let duration = window_seconds(config);
-    if duration == 0 {
-        return None;
-    }
-    let from = parse_hm(&config.online_from)?;
-    let now_ms = now.timestamp_millis();
+/// Are we inside any Online window?
+pub fn in_window_at(now: DateTime<Local>, config: &Config) -> bool {
+    config
+        .windows
+        .iter()
+        .any(|window| window_contains(window, now))
+}
 
-    let mut best: Option<(i64, Persona)> = None;
-    for offset in -1..=7i64 {
+/// Next time the desired presence actually changes, as `(unix milliseconds, target)`.
+///
+/// Looking at start/end boundaries is not enough when two windows touch: one ending as
+/// another starts does not change the presence. Each candidate is evaluated just after
+/// the boundary, so the returned pair is always a real transition.
+pub fn next_transition(now: DateTime<Local>, config: &Config) -> Option<(i64, Persona)> {
+    let now_ms = now.timestamp_millis();
+    let currently_online = in_window_at(now, config);
+    let mut candidates: Vec<i64> = Vec::new();
+
+    for offset in -1..=8i64 {
         let day = shift_days(now.date_naive(), offset);
         let key = weekday_key(day);
-        if !config.days.iter().any(|selected| selected == key) {
-            continue;
-        }
-        let Some(start) = local_at(day, from) else {
-            continue;
-        };
-        let candidates = [
-            (start, Persona::Online),
-            (
-                start + ChronoDuration::seconds(duration),
-                Persona::Invisible,
-            ),
-        ];
-        for (at, to) in candidates {
-            let at_ms = at.timestamp_millis();
-            if at_ms <= now_ms {
+        for window in &config.windows {
+            let duration = window_seconds(window);
+            if duration == 0 {
                 continue;
             }
-            if best.map_or(true, |(best_at, _)| at_ms < best_at) {
-                best = Some((at_ms, to));
+            if !window.days.iter().any(|selected| selected == key) {
+                continue;
+            }
+            let Some(from) = parse_hm(&window.from) else {
+                continue;
+            };
+            let Some(start) = local_at(day, from) else {
+                continue;
+            };
+            let start_ms = start.timestamp_millis();
+            let end_ms = start_ms + duration * 1000;
+            if start_ms > now_ms {
+                candidates.push(start_ms);
+            }
+            if end_ms > now_ms {
+                candidates.push(end_ms);
             }
         }
     }
-    best
+
+    candidates.sort_unstable();
+    candidates.dedup();
+
+    for at in candidates {
+        let Some(after) = local_from_ms(at + 1) else {
+            continue;
+        };
+        let online_after = in_window_at(after, config);
+        if online_after != currently_online {
+            return Some((
+                at,
+                if online_after {
+                    Persona::Online
+                } else {
+                    Persona::Invisible
+                },
+            ));
+        }
+    }
+
+    None
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::config::Config;
+    use crate::config::{Config, ScheduleWindow};
 
     fn at(year: i32, month: u32, day: u32, hour: u32, minute: u32) -> DateTime<Local> {
         match Local.with_ymd_and_hms(year, month, day, hour, minute, 0) {
@@ -140,16 +185,27 @@ mod tests {
         }
     }
 
-    fn weekday_config() -> Config {
+    fn window(days: &[&str], from: &str, until: &str) -> ScheduleWindow {
+        ScheduleWindow {
+            days: days.iter().map(|day| day.to_string()).collect(),
+            from: from.into(),
+            until: until.into(),
+        }
+    }
+
+    fn config_with(windows: Vec<ScheduleWindow>) -> Config {
         Config {
-            days: ["mon", "tue", "wed", "thu", "fri"]
-                .iter()
-                .map(|day| day.to_string())
-                .collect(),
-            online_from: "17:30".into(),
-            online_until: "01:00".into(),
+            windows,
             ..Config::default()
         }
+    }
+
+    fn weekday_config() -> Config {
+        config_with(vec![window(
+            &["mon", "tue", "wed", "thu", "fri"],
+            "17:30",
+            "01:00",
+        )])
     }
 
     #[test]
@@ -196,13 +252,84 @@ mod tests {
     }
 
     #[test]
+    fn independent_weekday_and_weekend_windows() {
+        let config = config_with(vec![
+            window(&["mon", "tue", "wed", "thu", "fri"], "17:00", "01:15"),
+            window(&["sat", "sun"], "10:00", "23:00"),
+        ]);
+
+        // Friday night belongs to Friday's weekday window.
+        assert!(in_window_at(at(2026, 10, 23, 23, 0), &config));
+        assert!(in_window_at(at(2026, 10, 24, 1, 0), &config));
+        assert!(!in_window_at(at(2026, 10, 24, 1, 15), &config));
+        // Saturday and Sunday use their own hours.
+        assert!(!in_window_at(at(2026, 10, 24, 9, 59), &config));
+        assert!(in_window_at(at(2026, 10, 24, 10, 0), &config));
+        assert!(!in_window_at(at(2026, 10, 24, 23, 0), &config));
+        assert!(in_window_at(at(2026, 10, 25, 12, 0), &config));
+        assert!(!in_window_at(at(2026, 10, 25, 23, 30), &config));
+        // Monday morning is outside both windows.
+        assert!(!in_window_at(at(2026, 10, 26, 9, 0), &config));
+
+        assert_eq!(
+            next_transition(at(2026, 10, 23, 23, 0), &config).unwrap(),
+            (
+                at(2026, 10, 24, 1, 15).timestamp_millis(),
+                Persona::Invisible
+            )
+        );
+        assert_eq!(
+            next_transition(at(2026, 10, 24, 23, 30), &config).unwrap(),
+            (at(2026, 10, 25, 10, 0).timestamp_millis(), Persona::Online)
+        );
+        assert_eq!(
+            next_transition(at(2026, 10, 25, 23, 30), &config).unwrap(),
+            (at(2026, 10, 26, 17, 0).timestamp_millis(), Persona::Online)
+        );
+    }
+
+    #[test]
+    fn adjacent_windows_skip_the_redundant_boundary() {
+        let config = config_with(vec![
+            window(&["mon"], "05:00", "10:00"),
+            window(&["mon"], "10:00", "12:00"),
+        ]);
+
+        assert!(in_window_at(at(2026, 10, 19, 9, 59), &config));
+        assert!(in_window_at(at(2026, 10, 19, 10, 0), &config));
+        // At 10:00 one window ends and another starts: the presence does not change.
+        assert_eq!(
+            next_transition(at(2026, 10, 19, 6, 0), &config).unwrap(),
+            (
+                at(2026, 10, 19, 12, 0).timestamp_millis(),
+                Persona::Invisible
+            )
+        );
+    }
+
+    #[test]
+    fn overlapping_windows_are_a_union() {
+        let config = config_with(vec![
+            window(&["mon"], "08:00", "12:00"),
+            window(&["mon"], "11:00", "14:00"),
+        ]);
+
+        assert!(!in_window_at(at(2026, 10, 19, 7, 59), &config));
+        assert!(in_window_at(at(2026, 10, 19, 10, 30), &config));
+        assert!(in_window_at(at(2026, 10, 19, 13, 0), &config));
+        assert!(!in_window_at(at(2026, 10, 19, 14, 0), &config));
+    }
+
+    #[test]
     fn no_window_when_times_match() {
-        let config = Config {
-            days: vec!["mon".into()],
-            online_from: "10:00".into(),
-            online_until: "10:00".into(),
-            ..Config::default()
-        };
+        let config = config_with(vec![window(&["mon"], "10:00", "10:00")]);
+        assert!(!in_window_at(at(2026, 10, 19, 10, 0), &config));
+        assert!(next_transition(at(2026, 10, 19, 12, 0), &config).is_none());
+    }
+
+    #[test]
+    fn no_windows_means_no_schedule() {
+        let config = config_with(Vec::new());
         assert!(!in_window_at(at(2026, 10, 19, 10, 0), &config));
         assert!(next_transition(at(2026, 10, 19, 12, 0), &config).is_none());
     }

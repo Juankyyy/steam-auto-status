@@ -30,8 +30,8 @@ const es = {
   'window.close': 'Cerrar',
 
   // ---------------------------------------------------------------- dashboard › status
-  'status.scheduleSummary.one': 'Horario: 1 día · {from}–{until}',
-  'status.scheduleSummary.many': 'Horario: {count} días · {from}–{until}',
+  'status.scheduleLabel': 'Horario:',
+  'status.scheduleSummary': '{days} · {from}–{until}',
   'status.nextChange': 'Próximo cambio',
   'status.nextAt': '{state} a las {time}',
   'status.in': 'en',
@@ -54,6 +54,9 @@ const es = {
   'schedule.hours': '{h} h',
   'schedule.hoursMinutes': '{h} h {m} min',
   'schedule.minutes': '{m} min',
+  'schedule.noDays': 'Sin días',
+  'schedule.dayRange': '{from}–{to}',
+  'schedule.daySeparator': ', ',
 
   'day.mon': 'Lun',
   'day.tue': 'Mar',
@@ -79,7 +82,7 @@ const es = {
   // ---------------------------------------------------------------- settings › schedule
   'settings.schedule.title': 'Horario',
   'settings.schedule.description':
-    'Elige los días y las horas en las que quieres que tu estado de Steam sea Conectado. Fuera de ese horario, la app cambiará tu estado a Invisible.',
+    'Añade uno o varios horarios con sus propios días y horas. Estarás Conectado mientras cualquiera de ellos esté activo; fuera de todos, Invisible.',
   'settings.schedule.from': 'Conectado desde',
   'settings.schedule.until': 'Hasta',
   'settings.schedule.hours': 'Horas',
@@ -92,11 +95,19 @@ const es = {
   'settings.schedule.crossesMidnight': 'Cruza medianoche',
   'settings.schedule.onlineFor': '{duration} conectado',
   'settings.schedule.days': 'Días',
-  'settings.schedule.toggle': 'Activar horario',
+  'settings.schedule.daysHint':
+    'Marca el día en que empieza cada franja; si termina al día siguiente, sigue activa.',
+  'settings.schedule.toggle': 'Activar automatización',
   'settings.schedule.enabledHint':
     'Cuando está desactivado, la app deja de cambiar tu estado; el actual se mantiene.',
   'settings.schedule.noWindowWarning':
-    'La hora de inicio y la de fin coinciden: ahora mismo no habría ninguna franja Conectado.',
+    'La hora de inicio y la de fin coinciden: este horario no tendría ninguna franja Conectado.',
+  'settings.schedule.noDaysWarning':
+    'Este horario no tiene días seleccionados, así que no se aplicará.',
+  'settings.schedule.add': 'Añadir horario',
+  'settings.schedule.remove': 'Quitar horario: {days}',
+  'settings.schedule.empty':
+    'No hay ningún horario. Añade uno para que la app sepa cuándo estar Conectado.',
 
   // ---------------------------------------------------------------- settings › steam client
   'steamClient.title': 'Cliente de Steam',
@@ -198,9 +209,9 @@ const es = {
   'diag.dataDir': 'Carpeta de datos: {value}',
   'diag.steamClient': 'Cliente de Steam: {state}',
   'diag.presence':
-    'Presencia: {persona} (deseada: {desired}) · en franja: {inWindow} · pausada: {paused}',
+    'Presencia: {persona} (deseada: {desired}) · en algún horario: {inWindow} · pausada: {paused}',
   'diag.lastApplied': 'Último estado aplicado: {value}',
-  'diag.schedule': 'Horario: {days} {from}→{until}',
+  'diag.schedule': 'Horario: {value}',
   'diag.lastError': 'Último error: {value}',
   'diag.none': 'ninguno',
   'diag.noState': 'Estado: aún no recibido',
@@ -224,8 +235,8 @@ const en: Record<keyof typeof es, string> = {
   'window.restore': 'Restore',
   'window.close': 'Close',
 
-  'status.scheduleSummary.one': 'Schedule: 1 day · {from}–{until}',
-  'status.scheduleSummary.many': 'Schedule: {count} days · {from}–{until}',
+  'status.scheduleLabel': 'Schedule:',
+  'status.scheduleSummary': '{days} · {from}–{until}',
   'status.nextChange': 'Next change',
   'status.nextAt': '{state} at {time}',
   'status.in': 'in',
@@ -247,6 +258,9 @@ const en: Record<keyof typeof es, string> = {
   'schedule.hours': '{h}h',
   'schedule.hoursMinutes': '{h}h {m}m',
   'schedule.minutes': '{m}m',
+  'schedule.noDays': 'No days',
+  'schedule.dayRange': '{from}–{to}',
+  'schedule.daySeparator': ', ',
 
   'day.mon': 'Mon',
   'day.tue': 'Tue',
@@ -269,7 +283,7 @@ const en: Record<keyof typeof es, string> = {
 
   'settings.schedule.title': 'Schedule',
   'settings.schedule.description':
-    'Choose the days and times when you want your Steam status to be Online. Outside that schedule, the app switches your status to Invisible.',
+    'Add one or more schedules, each with its own days and times. You are Online while any of them is active; outside all of them, Invisible.',
   'settings.schedule.from': 'Online from',
   'settings.schedule.until': 'Until',
   'settings.schedule.hours': 'Hours',
@@ -282,11 +296,18 @@ const en: Record<keyof typeof es, string> = {
   'settings.schedule.crossesMidnight': 'Crosses midnight',
   'settings.schedule.onlineFor': '{duration} online',
   'settings.schedule.days': 'Days',
-  'settings.schedule.toggle': 'Enable schedule',
+  'settings.schedule.daysHint':
+    'Pick the day each window starts; a window that ends after midnight stays active.',
+  'settings.schedule.toggle': 'Enable automation',
   'settings.schedule.enabledHint':
     'When off, the app stops changing your status; it stays as it is.',
   'settings.schedule.noWindowWarning':
-    'Start and end time are the same: there would be no Online window right now.',
+    'Start and end time are the same: this schedule would have no Online window.',
+  'settings.schedule.noDaysWarning': 'This schedule has no days selected, so it will not apply.',
+  'settings.schedule.add': 'Add schedule',
+  'settings.schedule.remove': 'Remove schedule: {days}',
+  'settings.schedule.empty':
+    'No schedules yet. Add one so the app knows when to be Online.',
 
   'steamClient.title': 'Steam client',
   'steamClient.description':
@@ -377,9 +398,9 @@ const en: Record<keyof typeof es, string> = {
   'diag.unknown': 'unknown',
   'diag.dataDir': 'Data folder: {value}',
   'diag.steamClient': 'Steam client: {state}',
-  'diag.presence': 'Presence: {persona} (desired: {desired}) · in window: {inWindow} · paused: {paused}',
+  'diag.presence': 'Presence: {persona} (desired: {desired}) · in schedule: {inWindow} · paused: {paused}',
   'diag.lastApplied': 'Last applied state: {value}',
-  'diag.schedule': 'Schedule: {days} {from}→{until}',
+  'diag.schedule': 'Schedule: {value}',
   'diag.lastError': 'Last error: {value}',
   'diag.none': 'none',
   'diag.noState': 'State: not received yet',
